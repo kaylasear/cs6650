@@ -1,4 +1,4 @@
-package assignment1.part1;
+package assignment1.part1.model;
 
 /**
  * Resort with season

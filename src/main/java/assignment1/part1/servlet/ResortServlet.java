@@ -1,6 +1,6 @@
 package assignment1.part1.servlet;
 
-import assignment1.part1.*;
+import assignment1.part1.model.*;
 import com.google.gson.Gson;
 import assignment1.part1.part1.model.model.*;
 

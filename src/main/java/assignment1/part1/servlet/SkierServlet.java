@@ -8,10 +8,10 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 
 import com.google.gson.Gson;
-import assignment1.part1.LiftRide;
-import assignment1.part1.ResponseMsg;
-import assignment1.part1.SkierVertical;
-import assignment1.part1.SkierVerticalResorts;
+import assignment1.part1.model.LiftRide;
+import assignment1.part1.model.ResponseMsg;
+import assignment1.part1.model.SkierVertical;
+import assignment1.part1.model.SkierVerticalResorts;
 
 
 public class SkierServlet extends HttpServlet {

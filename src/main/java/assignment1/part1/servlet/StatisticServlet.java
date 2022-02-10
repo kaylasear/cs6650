@@ -1,9 +1,9 @@
 package assignment1.part1.servlet;
 
 import com.google.gson.Gson;
-import assignment1.part1.APIEndpointStats;
-import assignment1.part1.APIStats;
-import assignment1.part1.ResponseMsg;
+import assignment1.part1.model.APIEndpointStats;
+import assignment1.part1.model.APIStats;
+import assignment1.part1.model.ResponseMsg;
 
 import javax.servlet.*;
 import javax.servlet.http.*;

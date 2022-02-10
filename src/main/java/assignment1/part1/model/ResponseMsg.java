@@ -1,4 +1,4 @@
-package assignment1.part1;
+package assignment1.part1.model;
 
 /**
  * Class represents a response message.

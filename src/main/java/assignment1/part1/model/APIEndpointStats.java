@@ -1,4 +1,4 @@
-package assignment1.part1;
+package assignment1.part1.model;
 
 /**
  * Class represents an endpoint statistic containing a URL, operation (GET/POST), mean, and max.
