@@ -6,7 +6,7 @@
 
     <servlet>
         <servlet-name>SkierServlet</servlet-name>
-        <servlet-class>part1.servlet.SkierServlet</servlet-class>
+        <servlet-class>assignment1.part1.servlet.SkierServlet</servlet-class>
     </servlet>
 
     <servlet-mapping>
@@ -16,7 +16,7 @@
 
     <servlet>
         <servlet-name>ResortServlet</servlet-name>
-        <servlet-class>part1.servlet.ResortServlet</servlet-class>
+        <servlet-class>assignment1.part1.servlet.ResortServlet</servlet-class>
     </servlet>
 
     <servlet-mapping>
@@ -26,7 +26,7 @@
 
     <servlet>
         <servlet-name>StatisticServlet</servlet-name>
-        <servlet-class>part1.servlet.StatisticServlet</servlet-class>
+        <servlet-class>assignment1.part1.servlet.StatisticServlet</servlet-class>
     </servlet>
 
     <servlet-mapping>

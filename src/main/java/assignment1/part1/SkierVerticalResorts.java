@@ -1,4 +1,4 @@
-package part1.model;
+package assignment1.part1;
 
 /**
  * Class represents total number of skiers at given season.

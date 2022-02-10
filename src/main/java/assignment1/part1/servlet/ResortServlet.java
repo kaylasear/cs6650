@@ -1,8 +1,8 @@
-package part1.servlet;
+package assignment1.part1.servlet;
 
+import assignment1.part1.*;
 import com.google.gson.Gson;
-import part1.model.*;
-import part1.model.model.*;
+import assignment1.part1.part1.model.model.*;
 
 import javax.servlet.*;
 import javax.servlet.http.*;

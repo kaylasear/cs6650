@@ -1,4 +1,4 @@
-package part1;
+package assignment1.part1;
 
 import java.io.IOException;
 import java.net.URI;
@@ -8,7 +8,8 @@ import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.concurrent.Callable;
 
-public class CooldownPhase implements Callable {
+
+public class PeakPhase implements Callable {
     private HttpClient httpClient;
 
     private int NUM_THREADS;
@@ -19,10 +20,10 @@ public class CooldownPhase implements Callable {
 
     private int startSkierId = 1;
     private int endSkierId;
-    private int startTime = 361;
-    private int endTime = 420;
+    private int startTime = 91;
+    private int endTime = 360;
 
-    private final double POST_VARIABLE = 0.1;
+    private final double POST_VARIABLE = 0.6;
     private int maxCalls;
     private int range;
 
@@ -35,30 +36,30 @@ public class CooldownPhase implements Callable {
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
 
-    public CooldownPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
+    public PeakPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
         this.httpClient = httpClient;
         this.NUM_THREADS = num_threads;
-        this.numThreadsInPhase = (int) Math.round(num_threads*0.10);
+        this.numThreadsInPhase = num_threads;
         this.numSkiers = numSkiers;
-        this.url = url;
         this.numLifts = numLifts;
+        this.url = url;
 
-        if (numThreadsInPhase == 0) {
-            this.numThreadsInPhase = 1;
-        }
         range = numSkiers/numThreadsInPhase;
     }
 
+
     @Override
-    synchronized public CooldownPhase call() throws Exception {
-        System.out.println("running cooldown phase....");
+    synchronized public PeakPhase call() throws Exception {
+        System.out.println("running peak phase....");
+        CooldownPhase result = null;
         int multiplier = 1;
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) (this.numLifts*POST_VARIABLE);
+            maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
             int counter = 1;
+            int currentNumOfRequests = 0;
 
             while (counter <= this.maxCalls) {
                 // Each POST should randomly select:
@@ -74,13 +75,23 @@ public class CooldownPhase implements Callable {
                 counter += 1;
                 totalNumOfSuccessfulRequests += 1;
 
+                // start phase 3
+                if (totalNumOfSuccessfulRequests == Math.round((maxCalls*numThreadsInPhase)*0.2)) {
+                    CooldownPhase cooldownPhase = new CooldownPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
+                    result = cooldownPhase.call();
+                }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
+        // grab total num of requests from cooldown phase and set it to the peak phase object
+        this.setTotalNumOfSuccessfulRequests(this.totalNumOfSuccessfulRequests+ result.getTotalNumOfSuccessfulRequests());
+        this.setTotalFailedRequests(this.totalFailedRequests + result.getTotalFailedRequests());
         return this;
+
     }
+
     private void executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
@@ -165,8 +176,8 @@ public class CooldownPhase implements Callable {
             }
         }
         return false;
-
     }
+
     /** Getters and Setters **/
 
     public int getTotalNumOfSuccessfulRequests() {
@@ -175,5 +186,14 @@ public class CooldownPhase implements Callable {
 
     public int getTotalFailedRequests() {
         return totalFailedRequests;
+    }
+
+    public void setTotalNumOfSuccessfulRequests(int totalNumOfSuccessfulRequests) {
+        this.totalNumOfSuccessfulRequests = totalNumOfSuccessfulRequests;
+    }
+
+
+    public void setTotalFailedRequests(int totalFailedRequests) {
+        this.totalFailedRequests = totalFailedRequests;
     }
 }

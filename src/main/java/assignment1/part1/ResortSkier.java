@@ -1,4 +1,4 @@
-package part1.model;
+package assignment1.part1;
 
 /**
  * Class represents a resort that has a name and total number of skiers.

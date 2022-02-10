@@ -1,4 +1,4 @@
-package part1.servlet;
+package assignment1.part1.servlet;
 
 import javax.servlet.*;
 import javax.servlet.http.*;
@@ -8,10 +8,10 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 
 import com.google.gson.Gson;
-import part1.model.LiftRide;
-import part1.model.ResponseMsg;
-import part1.model.SkierVertical;
-import part1.model.SkierVerticalResorts;
+import assignment1.part1.LiftRide;
+import assignment1.part1.ResponseMsg;
+import assignment1.part1.SkierVertical;
+import assignment1.part1.SkierVerticalResorts;
 
 
 public class SkierServlet extends HttpServlet {
