@@ -1,4 +1,6 @@
-package assignment1.part1;
+package assignment1.part2;
+
+import assignment1.part2.model.SystemStats;
 
 import java.io.IOException;
 import java.net.URI;
@@ -10,7 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 
-public class StartupPhase implements Callable {
+public class StartupPhase implements Callable<ArrayList<Integer>> {
     private final HttpClient httpClient;
     private final int NUM_THREADS;
     private int numThreadsInPhase;
@@ -55,10 +57,11 @@ public class StartupPhase implements Callable {
     }
 
     @Override
-    synchronized public ArrayList<Integer> call() throws Exception {
+    synchronized public ArrayList<SystemStats> call() throws Exception {
         System.out.println("running startup phase....");
-        PeakPhase resultPeakPhase = null;
         int multiplier = 1;
+        ArrayList<SystemStats> listOne = new ArrayList<>();
+        ArrayList<SystemStats> listTwo = new ArrayList<>();
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
@@ -68,7 +71,12 @@ public class StartupPhase implements Callable {
 
             while (counter <= this.maxCalls) {
                 try {
-                    executePostRequest();
+                    Long start = System.nanoTime();
+                    HttpResponse response = executePostRequest();
+                    Long end = System.nanoTime();
+
+                    SystemStats stat = getStats(response, start, end);
+                    listOne.add(stat);
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (InterruptedException e) {
@@ -81,22 +89,38 @@ public class StartupPhase implements Callable {
                 // start phase 2
                 if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
                     PeakPhase peakPhase = new PeakPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
-                    resultPeakPhase = peakPhase.call();
+                    listTwo = peakPhase.call();
                 }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
-        int totalRequests = this.totalNumOfSuccessfulRequests + resultPeakPhase.getTotalNumOfSuccessfulRequests();
-        int failedRequests = this.totalFailedRequests + resultPeakPhase.getTotalFailedRequests();
-        ArrayList<Integer> resulList = new ArrayList<>(Arrays.asList(totalRequests, failedRequests));
-        return resulList;
+
+        ArrayList<SystemStats> newList = new ArrayList<>(listOne);
+        newList.addAll(listTwo);
+        return newList;
 
     }
 
+    /**
+     * Build stats object and return it
+     * @param response
+     * @param start
+     * @param end
+     * @return
+     */
+    private SystemStats getStats(HttpResponse response, Long start, Long end) {
+        Long latency = (end - start)/1000000;
+        String method = response.request().method();
+        int responseCode = response.statusCode();
 
-    private void executePostRequest() throws IOException, InterruptedException {
+        SystemStats stat = new SystemStats(start,method, latency, responseCode);
+        return stat;
+    }
+
+
+    private HttpResponse executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
         // time value from range of minutes passed to each thread (between start and end time)
@@ -146,6 +170,7 @@ public class StartupPhase implements Callable {
 
 //        System.out.println(response.statusCode());
 //        System.out.println(response.body());
+        return response;
     }
 
     /**

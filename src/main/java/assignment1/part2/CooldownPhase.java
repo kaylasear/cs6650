@@ -1,4 +1,6 @@
-package assignment1.part1;
+package assignment1.part2;
+
+import assignment1.part2.model.SystemStats;
 
 import java.io.IOException;
 import java.net.URI;
@@ -7,28 +9,28 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.concurrent.Callable;
 
-public class StartupPhase implements Callable {
-    private final HttpClient httpClient;
-    private final int NUM_THREADS;
+public class CooldownPhase implements Callable<ArrayList<SystemStats>> {
+    private HttpClient httpClient;
+
+    private int NUM_THREADS;
     private int numThreadsInPhase;
     private int numSkiers;
-    private String url;
     private int numLifts;
+    private String url;
+
     private int startSkierId = 1;
     private int endSkierId;
-    private int startTime = 1;
-    private int endTime = 90;
+    private int startTime = 361;
+    private int endTime = 420;
 
-    private final double POST_VARIABLE = 0.2;
+    private final double POST_VARIABLE = 0.1;
     private int maxCalls;
     private int range;
 
     private static final int MINERRORCODE = 400;
     private static final int MAXERRORCODE = 599;
-
 
     private static String dayId = "5";
     private static String seasonId = "2019";
@@ -36,39 +38,42 @@ public class StartupPhase implements Callable {
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
 
-
-    public StartupPhase(HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
+    public CooldownPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
         this.httpClient = httpClient;
-        this.NUM_THREADS = numthreads;
-
-        if (numthreads == 1) {
-            this.numThreadsInPhase = numthreads;
-        } else {
-            this.numThreadsInPhase = Math.round(numthreads/4);
-        }
-
-        this.numSkiers = numskiers;
+        this.NUM_THREADS = num_threads;
+        this.numThreadsInPhase = (int) Math.round(num_threads*0.10);
+        this.numSkiers = numSkiers;
         this.url = url;
-        this.numLifts = numlifts;
+        this.numLifts = numLifts;
 
-        range = Math.round(numskiers/(numThreadsInPhase));
+        if (numThreadsInPhase == 0) {
+            this.numThreadsInPhase = 1;
+        }
+        range = numSkiers/numThreadsInPhase;
     }
 
     @Override
-    synchronized public ArrayList<Integer> call() throws Exception {
-        System.out.println("running startup phase....");
-        PeakPhase resultPeakPhase = null;
+    synchronized public ArrayList<SystemStats> call() throws Exception {
+        System.out.println("running cooldown phase....");
         int multiplier = 1;
+        ArrayList<SystemStats> stats = new ArrayList<>();
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
+            maxCalls = (int) (this.numLifts*POST_VARIABLE);
             int counter = 1;
 
             while (counter <= this.maxCalls) {
+                // Each POST should randomly select:
+                // skierId from range of Ids, liftId, time value, waitTime
                 try {
-                    executePostRequest();
+                    Long start = System.nanoTime();
+                    HttpResponse response = executePostRequest();
+                    Long end = System.nanoTime();
+
+                    SystemStats stat = getStats(response, start, end);
+                    stats.add(stat);
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (InterruptedException e) {
@@ -78,25 +83,31 @@ public class StartupPhase implements Callable {
                 counter += 1;
                 totalNumOfSuccessfulRequests += 1;
 
-                // start phase 2
-                if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
-                    PeakPhase peakPhase = new PeakPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
-                    resultPeakPhase = peakPhase.call();
-                }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
-        int totalRequests = this.totalNumOfSuccessfulRequests + resultPeakPhase.getTotalNumOfSuccessfulRequests();
-        int failedRequests = this.totalFailedRequests + resultPeakPhase.getTotalFailedRequests();
-        ArrayList<Integer> resulList = new ArrayList<>(Arrays.asList(totalRequests, failedRequests));
-        return resulList;
-
+        return stats;
     }
 
+    /**
+     * Build stats object and return it
+     * @param response
+     * @param start
+     * @param end
+     * @return
+     */
+    private SystemStats getStats(HttpResponse response, Long start, Long end) {
+        Long latency = (end - start)/1000000;
+        String method = response.request().method();
+        int responseCode = response.statusCode();
 
-    private void executePostRequest() throws IOException, InterruptedException {
+        SystemStats stat = new SystemStats(start,method, latency, responseCode);
+        return stat;
+    }
+
+    private HttpResponse executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
         // time value from range of minutes passed to each thread (between start and end time)
@@ -146,6 +157,7 @@ public class StartupPhase implements Callable {
 
 //        System.out.println(response.statusCode());
 //        System.out.println(response.body());
+        return response;
     }
 
     /**
@@ -180,12 +192,15 @@ public class StartupPhase implements Callable {
             }
         }
         return false;
-    }
 
+    }
     /** Getters and Setters **/
+
+    public int getTotalNumOfSuccessfulRequests() {
+        return totalNumOfSuccessfulRequests;
+    }
 
     public int getTotalFailedRequests() {
         return totalFailedRequests;
     }
-
 }

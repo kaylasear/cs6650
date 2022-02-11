@@ -1,7 +1,9 @@
-package assignment1.part1;
+package assignment1.part2;
+
+import assignment1.part2.model.SystemStats;
+
 import java.io.IOException;
 import java.net.http.HttpClient;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.*;
@@ -37,16 +39,15 @@ public class HttpClientSynchronous extends Thread {
 
         long start = System.nanoTime();
         // three phases - each one sending a large number of lift rides to the server API
-        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
+        final Future<ArrayList<SystemStats>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
 
-        int success = future.get().get(0);
-        int failures = future.get().get(1);
+        ArrayList<SystemStats> success = future.get();
         pool.shutdown();
 
         try {
             pool.awaitTermination(1000, TimeUnit.SECONDS);
             long finish = System.nanoTime();
-            // convert wall time to milliseconds
+            // wall time in milliseconds
             long wallTime = ((finish - start)/1000000);
 
             System.out.println("Total successful requests: " + success);
