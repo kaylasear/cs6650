@@ -68,9 +68,9 @@ public class CooldownPhase implements Callable<ArrayList<SystemStats>> {
                 // Each POST should randomly select:
                 // skierId from range of Ids, liftId, time value, waitTime
                 try {
-                    double start = (double)System.nanoTime();
+                    double start = (double)System.currentTimeMillis();
                     HttpResponse response = executePostRequest();
-                    Long end = System.nanoTime();
+                    double end = (double)System.currentTimeMillis();
 
                     SystemStats stat = getStats(response, start, end);
                     stats.add(stat);
@@ -98,8 +98,8 @@ public class CooldownPhase implements Callable<ArrayList<SystemStats>> {
      * @param end
      * @return
      */
-    private SystemStats getStats(HttpResponse response, double start, Long end) {
-        double latency = (end - start)/1000000;
+    private SystemStats getStats(HttpResponse response, double start, double end) {
+        double latency = (end - start);
         String method = response.request().method();
         int responseCode = response.statusCode();
 

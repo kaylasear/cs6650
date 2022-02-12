@@ -70,9 +70,9 @@ public class StartupPhase implements Callable{
 
             while (counter <= this.maxCalls) {
                 try {
-                    double start = (double)System.nanoTime();
+                    double start = (double)System.currentTimeMillis();
                     HttpResponse response = executePostRequest();
-                    Long end = System.nanoTime();
+                    double end = (double)System.currentTimeMillis();
 
                     SystemStats stat = getStats(response, start, end);
                     listOne.add(stat);
@@ -109,8 +109,8 @@ public class StartupPhase implements Callable{
      * @param end
      * @return
      */
-    private SystemStats getStats(HttpResponse response, double start, Long end) {
-        double latency = (end - start)/1000000;
+    private SystemStats getStats(HttpResponse response, double start, double end) {
+        double latency = (end - start);
         String method = response.request().method();
         int responseCode = response.statusCode();
 

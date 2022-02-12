@@ -44,24 +44,18 @@ public class HttpClientSynchronous extends Thread {
         pool.shutdown();
 
         try {
+            System.out.println("ALl done! Shutting down...");
             pool.awaitTermination(1000, TimeUnit.SECONDS);
 
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
-        buildRecord(systemStats);
-        ResultGenerator resultGenerator = new ResultGenerator(systemStats);
+        CsvWriter csvWriter = new CsvWriter();
+        csvWriter.writeToCsvFile(systemStats, "./src/main/java/assignment1/part2/systemstats.csv");
+        //ResultGenerator resultGenerator = new ResultGenerator(systemStats);
     }
 
-
-
-    /**
-     * Write out a record containing system stats into a CVS
-     * @param systemStats
-     */
-    private static void buildRecord(ArrayList<SystemStats> systemStats) {
-    }
 
     /**
      * Check and assign arguments
