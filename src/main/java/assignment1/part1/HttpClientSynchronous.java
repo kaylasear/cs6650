@@ -6,6 +6,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.*;
 
+/**
+ * Class represents a HttpClient that sends requests to API server
+ */
 public class HttpClientSynchronous extends Thread {
     private static HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(10))
@@ -35,7 +38,7 @@ public class HttpClientSynchronous extends Thread {
         ExecutorService pool = Executors.newFixedThreadPool(NUMTHREADS);
         url = url + SERVERADDRESS + webapp;
 
-        long start = System.nanoTime();
+        long start = System.currentTimeMillis();
         // three phases - each one sending a large number of lift rides to the server API
         final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
 
@@ -45,9 +48,8 @@ public class HttpClientSynchronous extends Thread {
 
         try {
             pool.awaitTermination(1000, TimeUnit.SECONDS);
-            long finish = System.nanoTime();
-            // convert wall time to milliseconds
-            long wallTime = ((finish - start)/1000000);
+            long finish = System.currentTimeMillis();
+            long wallTime = (finish - start);
 
             System.out.println("Total successful requests: " + success);
             System.out.println("Total failed requests: " + failures);

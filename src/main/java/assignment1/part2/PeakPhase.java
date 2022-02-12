@@ -9,11 +9,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-
+/**
+ * Class represents the Peak Phase, will launch NUMTHREADS to send POST requests
+ */
 public class PeakPhase implements Callable<ArrayList<SystemStats>> {
     private HttpClient httpClient;
 
@@ -41,6 +44,15 @@ public class PeakPhase implements Callable<ArrayList<SystemStats>> {
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
 
+    /**
+     * Constructs a Peak Phase object with httpclient, num of threads, num of skiers, url and num of lifts
+     * Determine the range to assign skierIds
+     * @param httpClient
+     * @param num_threads
+     * @param numSkiers
+     * @param url
+     * @param numLifts
+     */
     public PeakPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
         this.httpClient = httpClient;
         this.NUM_THREADS = num_threads;
@@ -52,7 +64,11 @@ public class PeakPhase implements Callable<ArrayList<SystemStats>> {
         range = numSkiers/numThreadsInPhase;
     }
 
-
+    /**
+     * Start the call to execute http requests with a start and end range of skierIds
+     * @return list of System Stat object that contains info on request stats
+     * @throws Exception
+     */
     @Override
     synchronized public ArrayList<SystemStats> call() throws Exception {
         System.out.println("running peak phase....");
@@ -120,6 +136,11 @@ public class PeakPhase implements Callable<ArrayList<SystemStats>> {
         return stat;
     }
 
+    /**
+     * Execute a post request to create a lift ride object
+     * @throws IOException
+     * @throws InterruptedException
+     */
     private HttpResponse executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
@@ -168,8 +189,6 @@ public class PeakPhase implements Callable<ArrayList<SystemStats>> {
             this.totalNumOfSuccessfulRequests -= 1;
         }
         return response;
-//        System.out.println(response.statusCode());
-//        System.out.println(response.body());
     }
 
     /**
@@ -220,8 +239,41 @@ public class PeakPhase implements Callable<ArrayList<SystemStats>> {
         this.totalNumOfSuccessfulRequests = totalNumOfSuccessfulRequests;
     }
 
-
     public void setTotalFailedRequests(int totalFailedRequests) {
         this.totalFailedRequests = totalFailedRequests;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PeakPhase peakPhase = (PeakPhase) o;
+        return NUM_THREADS == peakPhase.NUM_THREADS && numThreadsInPhase == peakPhase.numThreadsInPhase && numSkiers == peakPhase.numSkiers && numLifts == peakPhase.numLifts && startSkierId == peakPhase.startSkierId && endSkierId == peakPhase.endSkierId && startTime == peakPhase.startTime && endTime == peakPhase.endTime && Double.compare(peakPhase.POST_VARIABLE, POST_VARIABLE) == 0 && maxCalls == peakPhase.maxCalls && range == peakPhase.range && totalNumOfSuccessfulRequests == peakPhase.totalNumOfSuccessfulRequests && totalFailedRequests == peakPhase.totalFailedRequests && Objects.equals(httpClient, peakPhase.httpClient) && Objects.equals(url, peakPhase.url);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(httpClient, NUM_THREADS, numThreadsInPhase, numSkiers, numLifts, url, startSkierId, endSkierId, startTime, endTime, POST_VARIABLE, maxCalls, range, totalNumOfSuccessfulRequests, totalFailedRequests);
+    }
+
+    @Override
+    public String toString() {
+        return "PeakPhase{" +
+                "httpClient=" + httpClient +
+                ", NUM_THREADS=" + NUM_THREADS +
+                ", numThreadsInPhase=" + numThreadsInPhase +
+                ", numSkiers=" + numSkiers +
+                ", numLifts=" + numLifts +
+                ", url='" + url + '\'' +
+                ", startSkierId=" + startSkierId +
+                ", endSkierId=" + endSkierId +
+                ", startTime=" + startTime +
+                ", endTime=" + endTime +
+                ", POST_VARIABLE=" + POST_VARIABLE +
+                ", maxCalls=" + maxCalls +
+                ", range=" + range +
+                ", totalNumOfSuccessfulRequests=" + totalNumOfSuccessfulRequests +
+                ", totalFailedRequests=" + totalFailedRequests +
+                '}';
     }
 }

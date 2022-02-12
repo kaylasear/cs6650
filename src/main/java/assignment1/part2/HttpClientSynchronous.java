@@ -8,6 +8,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.*;
 
+/**
+ * Class represents a HttpClient that sends requests to API server
+ */
 public class HttpClientSynchronous extends Thread {
     private static HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(10))
@@ -52,8 +55,12 @@ public class HttpClientSynchronous extends Thread {
         }
 
         CsvWriter csvWriter = new CsvWriter();
-        csvWriter.writeToCsvFile(systemStats, "./src/main/java/assignment1/part2/systemstats.csv");
-        //ResultGenerator resultGenerator = new ResultGenerator(systemStats);
+        csvWriter.writeToCsvFile(systemStats, "systemstats.csv");
+
+        // calculate response time stats
+        ResultGenerator resultGenerator = new ResultGenerator(systemStats);
+        resultGenerator.generateResults();
+        System.out.println(resultGenerator);
     }
 
 

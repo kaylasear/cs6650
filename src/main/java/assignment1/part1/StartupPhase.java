@@ -8,8 +8,12 @@ import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
+/**
+ * Class represents the StartUp Phase, will launch numThreads/4 threads
+ */
 public class StartupPhase implements Callable {
     private final HttpClient httpClient;
     private final int NUM_THREADS;
@@ -37,6 +41,15 @@ public class StartupPhase implements Callable {
     private int totalFailedRequests = 0;
 
 
+    /**
+     * Constructs a StartUp Phase object with Httpclient, num of threads, num of skiers, url and num of lifts
+     * Determine the range to assign skierIds
+     * @param httpClient
+     * @param numthreads
+     * @param numskiers
+     * @param url
+     * @param numlifts
+     */
     public StartupPhase(HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
         this.httpClient = httpClient;
         this.NUM_THREADS = numthreads;
@@ -54,6 +67,11 @@ public class StartupPhase implements Callable {
         range = Math.round(numskiers/(numThreadsInPhase));
     }
 
+    /**
+     * Start the call to execute http requests with a start and end range of skierIds
+     * @return
+     * @throws Exception
+     */
     @Override
     synchronized public ArrayList<Integer> call() throws Exception {
         System.out.println("running startup phase....");
@@ -95,7 +113,11 @@ public class StartupPhase implements Callable {
 
     }
 
-
+    /**
+     * Execute a post request to create a lift ride object
+     * @throws IOException
+     * @throws InterruptedException
+     */
     private void executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
@@ -143,9 +165,6 @@ public class StartupPhase implements Callable {
             this.totalFailedRequests += 1;
             this.totalNumOfSuccessfulRequests -= 1;
         }
-
-//        System.out.println(response.statusCode());
-//        System.out.println(response.body());
     }
 
     /**
@@ -188,4 +207,37 @@ public class StartupPhase implements Callable {
         return totalFailedRequests;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StartupPhase that = (StartupPhase) o;
+        return NUM_THREADS == that.NUM_THREADS && numThreadsInPhase == that.numThreadsInPhase && numSkiers == that.numSkiers && numLifts == that.numLifts && startSkierId == that.startSkierId && endSkierId == that.endSkierId && startTime == that.startTime && endTime == that.endTime && Double.compare(that.POST_VARIABLE, POST_VARIABLE) == 0 && maxCalls == that.maxCalls && range == that.range && totalNumOfSuccessfulRequests == that.totalNumOfSuccessfulRequests && totalFailedRequests == that.totalFailedRequests && Objects.equals(httpClient, that.httpClient) && Objects.equals(url, that.url);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(httpClient, NUM_THREADS, numThreadsInPhase, numSkiers, url, numLifts, startSkierId, endSkierId, startTime, endTime, POST_VARIABLE, maxCalls, range, totalNumOfSuccessfulRequests, totalFailedRequests);
+    }
+
+    @Override
+    public String toString() {
+        return "StartupPhase{" +
+                "httpClient=" + httpClient +
+                ", NUM_THREADS=" + NUM_THREADS +
+                ", numThreadsInPhase=" + numThreadsInPhase +
+                ", numSkiers=" + numSkiers +
+                ", url='" + url + '\'' +
+                ", numLifts=" + numLifts +
+                ", startSkierId=" + startSkierId +
+                ", endSkierId=" + endSkierId +
+                ", startTime=" + startTime +
+                ", endTime=" + endTime +
+                ", POST_VARIABLE=" + POST_VARIABLE +
+                ", maxCalls=" + maxCalls +
+                ", range=" + range +
+                ", totalNumOfSuccessfulRequests=" + totalNumOfSuccessfulRequests +
+                ", totalFailedRequests=" + totalFailedRequests +
+                '}';
+    }
 }

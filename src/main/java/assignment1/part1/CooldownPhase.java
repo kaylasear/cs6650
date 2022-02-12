@@ -6,8 +6,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
+/**
+ * Class represents CoolDown Phase, which launches 10% of NUMTHREADS
+ */
 public class CooldownPhase implements Callable {
     private HttpClient httpClient;
 
@@ -35,6 +39,15 @@ public class CooldownPhase implements Callable {
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
 
+    /**
+     * Constructs a CoolDown Phase object with httpclient, num of threads, num of skiers, url and num of lifts
+     * Determine the range to assign skierIds
+     * @param httpClient
+     * @param num_threads
+     * @param numSkiers
+     * @param url
+     * @param numLifts
+     */
     public CooldownPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
         this.httpClient = httpClient;
         this.NUM_THREADS = num_threads;
@@ -49,6 +62,11 @@ public class CooldownPhase implements Callable {
         range = numSkiers/numThreadsInPhase;
     }
 
+    /**
+     * Start the call to execute http requests with a start and end range of skierIds
+     * @return
+     * @throws Exception
+     */
     @Override
     synchronized public CooldownPhase call() throws Exception {
         System.out.println("running cooldown phase....");
@@ -81,6 +99,12 @@ public class CooldownPhase implements Callable {
         }
         return this;
     }
+
+    /**
+     * Execute a post request to create a lift ride object
+     * @throws IOException
+     * @throws InterruptedException
+     */
     private void executePostRequest() throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, numLifts);
@@ -128,9 +152,6 @@ public class CooldownPhase implements Callable {
             this.totalFailedRequests += 1;
             this.totalNumOfSuccessfulRequests -= 1;
         }
-
-//        System.out.println(response.statusCode());
-//        System.out.println(response.body());
     }
 
     /**
@@ -175,5 +196,39 @@ public class CooldownPhase implements Callable {
 
     public int getTotalFailedRequests() {
         return totalFailedRequests;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CooldownPhase that = (CooldownPhase) o;
+        return NUM_THREADS == that.NUM_THREADS && numThreadsInPhase == that.numThreadsInPhase && numSkiers == that.numSkiers && numLifts == that.numLifts && startSkierId == that.startSkierId && endSkierId == that.endSkierId && startTime == that.startTime && endTime == that.endTime && Double.compare(that.POST_VARIABLE, POST_VARIABLE) == 0 && maxCalls == that.maxCalls && range == that.range && totalNumOfSuccessfulRequests == that.totalNumOfSuccessfulRequests && totalFailedRequests == that.totalFailedRequests && Objects.equals(httpClient, that.httpClient) && Objects.equals(url, that.url);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(httpClient, NUM_THREADS, numThreadsInPhase, numSkiers, numLifts, url, startSkierId, endSkierId, startTime, endTime, POST_VARIABLE, maxCalls, range, totalNumOfSuccessfulRequests, totalFailedRequests);
+    }
+
+    @Override
+    public String toString() {
+        return "CooldownPhase{" +
+                "httpClient=" + httpClient +
+                ", NUM_THREADS=" + NUM_THREADS +
+                ", numThreadsInPhase=" + numThreadsInPhase +
+                ", numSkiers=" + numSkiers +
+                ", numLifts=" + numLifts +
+                ", url='" + url + '\'' +
+                ", startSkierId=" + startSkierId +
+                ", endSkierId=" + endSkierId +
+                ", startTime=" + startTime +
+                ", endTime=" + endTime +
+                ", POST_VARIABLE=" + POST_VARIABLE +
+                ", maxCalls=" + maxCalls +
+                ", range=" + range +
+                ", totalNumOfSuccessfulRequests=" + totalNumOfSuccessfulRequests +
+                ", totalFailedRequests=" + totalFailedRequests +
+                '}';
     }
 }
