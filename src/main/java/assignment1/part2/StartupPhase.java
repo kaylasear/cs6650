@@ -9,10 +9,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.concurrent.Callable;
 
-public class StartupPhase implements Callable<ArrayList<Integer>> {
+public class StartupPhase implements Callable{
     private final HttpClient httpClient;
     private final int NUM_THREADS;
     private int numThreadsInPhase;
@@ -71,7 +70,7 @@ public class StartupPhase implements Callable<ArrayList<Integer>> {
 
             while (counter <= this.maxCalls) {
                 try {
-                    Long start = System.nanoTime();
+                    double start = (double)System.nanoTime();
                     HttpResponse response = executePostRequest();
                     Long end = System.nanoTime();
 
@@ -110,8 +109,8 @@ public class StartupPhase implements Callable<ArrayList<Integer>> {
      * @param end
      * @return
      */
-    private SystemStats getStats(HttpResponse response, Long start, Long end) {
-        Long latency = (end - start)/1000000;
+    private SystemStats getStats(HttpResponse response, double start, Long end) {
+        double latency = (end - start)/1000000;
         String method = response.request().method();
         int responseCode = response.statusCode();
 

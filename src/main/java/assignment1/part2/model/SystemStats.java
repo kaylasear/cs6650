@@ -1,19 +1,19 @@
 package assignment1.part2.model;
 
 public class SystemStats {
-    private Long startTime;
+    private double startTime;
     private String requestType;
-    private Long latency;
+    private double latency;
     private Integer responseCode;
 
-    public SystemStats(Long startTime, String requestType, Long latency, Integer responseCode) {
+    public SystemStats(double startTime, String requestType, double latency, Integer responseCode) {
         this.startTime = startTime;
         this.requestType = requestType;
         this.latency = latency;
         this.responseCode = responseCode;
     }
 
-    public Long getStartTime() {
+    public double getStartTime() {
         return startTime;
     }
 
@@ -21,7 +21,7 @@ public class SystemStats {
         return requestType;
     }
 
-    public Long getLatency() {
+    public double getLatency() {
         return latency;
     }
 

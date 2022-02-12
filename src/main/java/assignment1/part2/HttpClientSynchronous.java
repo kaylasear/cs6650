@@ -37,29 +37,30 @@ public class HttpClientSynchronous extends Thread {
         ExecutorService pool = Executors.newFixedThreadPool(NUMTHREADS);
         url = url + SERVERADDRESS + webapp;
 
-        long start = System.nanoTime();
         // three phases - each one sending a large number of lift rides to the server API
         final Future<ArrayList<SystemStats>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
 
-        ArrayList<SystemStats> success = future.get();
+        ArrayList<SystemStats> systemStats = future.get();
         pool.shutdown();
 
         try {
             pool.awaitTermination(1000, TimeUnit.SECONDS);
-            long finish = System.nanoTime();
-            // wall time in milliseconds
-            long wallTime = ((finish - start)/1000000);
 
-            System.out.println("Total successful requests: " + success);
-            System.out.println("Total failed requests: " + failures);
-            System.out.println("Wall Time in milliseconds: " + wallTime);
-
-            double throughout = (double) success/wallTime;
-            System.out.println("Total throughput: " + throughout);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
+        buildRecord(systemStats);
+        ResultGenerator resultGenerator = new ResultGenerator(systemStats);
+    }
+
+
+
+    /**
+     * Write out a record containing system stats into a CVS
+     * @param systemStats
+     */
+    private static void buildRecord(ArrayList<SystemStats> systemStats) {
     }
 
     /**
