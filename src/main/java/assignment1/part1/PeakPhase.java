@@ -73,14 +73,14 @@ public class PeakPhase implements Callable {
     synchronized public PeakPhase call() throws Exception {
         System.out.println("running peak phase....");
         Future<CooldownPhase> future = null;
+        //CooldownPhase result = null;
         int multiplier = 1;
+        maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
             int counter = 1;
-            int currentNumOfRequests = 0;
 
             while (counter <= this.maxCalls) {
                 // Each POST should randomly select:
@@ -100,6 +100,7 @@ public class PeakPhase implements Callable {
                 if (totalNumOfSuccessfulRequests == Math.round((maxCalls*numThreadsInPhase)*0.2)) {
                     CooldownPhase cooldownPhase = new CooldownPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
                     future = pool.submit(cooldownPhase);
+                    //result = cooldownPhase.call();
                 }
             }
             // start new range of skierIds
@@ -107,7 +108,7 @@ public class PeakPhase implements Callable {
             startSkierId = endSkierId+1;
         }
         // grab total num of requests from cooldown phase and set it to the peak phase object
-        CooldownPhase result = future.get();
+       CooldownPhase result = future.get();
 
         this.setTotalNumOfSuccessfulRequests(this.totalNumOfSuccessfulRequests+ result.getTotalNumOfSuccessfulRequests());
         this.setTotalFailedRequests(this.totalFailedRequests + result.getTotalFailedRequests());

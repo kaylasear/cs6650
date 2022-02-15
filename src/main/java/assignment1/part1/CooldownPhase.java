@@ -71,11 +71,11 @@ public class CooldownPhase implements Callable {
     synchronized public CooldownPhase call() throws Exception {
         System.out.println("running cooldown phase....");
         int multiplier = 1;
+        maxCalls = (int) (this.numLifts*POST_VARIABLE);
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) (this.numLifts*POST_VARIABLE);
             int counter = 1;
 
             while (counter <= this.maxCalls) {

@@ -23,8 +23,8 @@ public class HttpClientSynchronous extends Thread {
     private static final int MAXTHREADS = 1024;
     private static final int MAXSKIERS = 100000;
 
-    private static int NUMTHREADS = 0;
-    private static int NUMSKIERS = 0;
+    private static int NUMTHREADS;
+    private static int NUMSKIERS;
     private static int NUMLIFTS = 40;
     private static int MEANNUMLIFTSPERDAY = 10;
     private static String SERVERADDRESS = null;

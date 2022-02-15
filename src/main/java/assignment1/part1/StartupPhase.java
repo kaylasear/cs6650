@@ -62,7 +62,7 @@ public class StartupPhase implements Callable {
         if (numthreads == 1) {
             this.numThreadsInPhase = numthreads;
         } else {
-            this.numThreadsInPhase = Math.round(numthreads/4)+1;
+            this.numThreadsInPhase = Math.round(numthreads/4);
         }
 
         this.numSkiers = numskiers;
@@ -82,12 +82,14 @@ public class StartupPhase implements Callable {
     synchronized public ArrayList<Integer> call() throws Exception {
         System.out.println("running startup phase....");
         Future<PeakPhase> future = null;
+        //PeakPhase result  = null;
         int multiplier = 1;
+        maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
+
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
             int counter = 1;
 
             while (counter <= this.maxCalls) {
@@ -106,6 +108,7 @@ public class StartupPhase implements Callable {
                 if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
                     PeakPhase peakPhase = new PeakPhase(pool, httpClient, NUM_THREADS, numSkiers, url, numLifts);
                     future = pool.submit(peakPhase);
+                    //result = peakPhase.call();
                 }
             }
             // start new range of skierIds
