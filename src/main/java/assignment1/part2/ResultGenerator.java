@@ -91,7 +91,7 @@ public class ResultGenerator {
     }
 
     /**
-     * Calculate the wall time by adding up all the response times
+     * Calculate the wall time in seconds by adding up all the response times
      * @return the wall time
      */
     private double getWallTime() {
@@ -100,7 +100,7 @@ public class ResultGenerator {
         for (Double response : this.responseTimes) {
             wallTime += response;
         }
-        return wallTime;
+        return wallTime/1000;
     }
 
     /**

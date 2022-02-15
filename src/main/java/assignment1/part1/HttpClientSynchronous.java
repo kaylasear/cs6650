@@ -40,7 +40,7 @@ public class HttpClientSynchronous extends Thread {
 
         long start = System.currentTimeMillis();
         // three phases - each one sending a large number of lift rides to the server API
-        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
+        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(pool, httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
 
         int success = future.get().get(0);
         int failures = future.get().get(1);
@@ -53,9 +53,9 @@ public class HttpClientSynchronous extends Thread {
 
             System.out.println("Total successful requests: " + success);
             System.out.println("Total failed requests: " + failures);
-            System.out.println("Wall Time in milliseconds: " + wallTime);
+            System.out.println("Wall Time in seconds: " + wallTime/1000);
 
-            double throughout = (double) success/wallTime;
+            double throughout = (double) success/(wallTime/1000);
             System.out.println("Total throughput: " + throughout);
         } catch (InterruptedException e) {
             e.printStackTrace();

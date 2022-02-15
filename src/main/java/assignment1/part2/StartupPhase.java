@@ -11,6 +11,8 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 /**
  * Class represents the StartUp Phase, will launch numThreads/4 threads
@@ -40,17 +42,20 @@ public class StartupPhase implements Callable{
     private static String resortId = "1";
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
+    private ExecutorService pool;
 
     /**
      * Constructs a StartUp Phase object with Httpclient, num of threads, num of skiers, url and num of lifts
      * Determine the range to assign skierIds
+     * @param pool
      * @param httpClient
      * @param numthreads
      * @param numskiers
      * @param url
      * @param numlifts
      */
-    public StartupPhase(HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
+    public StartupPhase(ExecutorService pool, HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
+        this.pool = pool;
         this.httpClient = httpClient;
         this.NUM_THREADS = numthreads;
 
@@ -76,8 +81,8 @@ public class StartupPhase implements Callable{
     synchronized public ArrayList<SystemStats> call() throws Exception {
         System.out.println("running startup phase....");
         int multiplier = 1;
+        Future<ArrayList<SystemStats>> future = null;
         ArrayList<SystemStats> listOne = new ArrayList<>();
-        ArrayList<SystemStats> listTwo = new ArrayList<>();
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
@@ -104,15 +109,15 @@ public class StartupPhase implements Callable{
 
                 // start phase 2
                 if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
-                    PeakPhase peakPhase = new PeakPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
-                    listTwo = peakPhase.call();
+                    PeakPhase peakPhase = new PeakPhase(pool, httpClient, NUM_THREADS, numSkiers, url, numLifts);
+                    future = pool.submit(peakPhase);
                 }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
-
+        ArrayList<SystemStats> listTwo = future.get();
         ArrayList<SystemStats> newList = new ArrayList<>(listOne);
         newList.addAll(listTwo);
         return newList;

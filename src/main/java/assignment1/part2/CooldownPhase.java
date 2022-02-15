@@ -11,6 +11,8 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 /**
  * Class represents CoolDown Phase, which launches 10% of NUMTHREADS to send POST requests

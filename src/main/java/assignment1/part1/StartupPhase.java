@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Class represents the StartUp Phase, will launch numThreads/4 threads
@@ -39,30 +42,33 @@ public class StartupPhase implements Callable {
     private static String resortId = "1";
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
+    private ExecutorService pool;
 
 
     /**
      * Constructs a StartUp Phase object with Httpclient, num of threads, num of skiers, url and num of lifts
      * Determine the range to assign skierIds
+     * @param pool
      * @param httpClient
      * @param numthreads
      * @param numskiers
      * @param url
      * @param numlifts
      */
-    public StartupPhase(HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
+    public StartupPhase(ExecutorService pool, HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
         this.httpClient = httpClient;
         this.NUM_THREADS = numthreads;
 
         if (numthreads == 1) {
             this.numThreadsInPhase = numthreads;
         } else {
-            this.numThreadsInPhase = Math.round(numthreads/4);
+            this.numThreadsInPhase = Math.round(numthreads/4)+1;
         }
 
         this.numSkiers = numskiers;
         this.url = url;
         this.numLifts = numlifts;
+        this.pool = pool;
 
         range = Math.round(numskiers/(numThreadsInPhase));
     }
@@ -75,7 +81,7 @@ public class StartupPhase implements Callable {
     @Override
     synchronized public ArrayList<Integer> call() throws Exception {
         System.out.println("running startup phase....");
-        PeakPhase resultPeakPhase = null;
+        Future<PeakPhase> future = null;
         int multiplier = 1;
 
         for (int i = 0; i < numThreadsInPhase; i++) {
@@ -98,18 +104,19 @@ public class StartupPhase implements Callable {
 
                 // start phase 2
                 if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
-                    PeakPhase peakPhase = new PeakPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
-                    resultPeakPhase = peakPhase.call();
+                    PeakPhase peakPhase = new PeakPhase(pool, httpClient, NUM_THREADS, numSkiers, url, numLifts);
+                    future = pool.submit(peakPhase);
                 }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
-        int totalRequests = this.totalNumOfSuccessfulRequests + resultPeakPhase.getTotalNumOfSuccessfulRequests();
-        int failedRequests = this.totalFailedRequests + resultPeakPhase.getTotalFailedRequests();
-        ArrayList<Integer> resulList = new ArrayList<>(Arrays.asList(totalRequests, failedRequests));
-        return resulList;
+        PeakPhase peakPhase = future.get();
+        int totalRequests = this.totalNumOfSuccessfulRequests + peakPhase.getTotalNumOfSuccessfulRequests();
+        int failedRequests = this.totalFailedRequests + peakPhase.getTotalFailedRequests();
+        ArrayList<Integer> resultList = new ArrayList<>(Arrays.asList(totalRequests, failedRequests));
+        return resultList;
 
     }
 
@@ -165,6 +172,7 @@ public class StartupPhase implements Callable {
             this.totalFailedRequests += 1;
             this.totalNumOfSuccessfulRequests -= 1;
         }
+        System.out.println("start up phase" + response.body());
     }
 
     /**

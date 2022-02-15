@@ -8,6 +8,8 @@ import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 /**
  * Class represents the Peak Phase, will launch NUMTHREADS to send POST requests
@@ -38,17 +40,20 @@ public class PeakPhase implements Callable {
     private static String resortId = "1";
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
+    private ExecutorService pool;
 
     /**
      * Constructs a Peak Phase object with httpclient, num of threads, num of skiers, url and num of lifts
      * Determine the range to assign skierIds
+     * @param pool
      * @param httpClient
      * @param num_threads
      * @param numSkiers
      * @param url
      * @param numLifts
      */
-    public PeakPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
+    public PeakPhase(ExecutorService pool, HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
+        this.pool = pool;
         this.httpClient = httpClient;
         this.NUM_THREADS = num_threads;
         this.numThreadsInPhase = num_threads;
@@ -67,7 +72,7 @@ public class PeakPhase implements Callable {
     @Override
     synchronized public PeakPhase call() throws Exception {
         System.out.println("running peak phase....");
-        CooldownPhase result = null;
+        Future<CooldownPhase> future = null;
         int multiplier = 1;
 
         for (int i = 0; i < numThreadsInPhase; i++) {
@@ -94,7 +99,7 @@ public class PeakPhase implements Callable {
                 // start phase 3
                 if (totalNumOfSuccessfulRequests == Math.round((maxCalls*numThreadsInPhase)*0.2)) {
                     CooldownPhase cooldownPhase = new CooldownPhase(httpClient, NUM_THREADS, numSkiers, url, numLifts);
-                    result = cooldownPhase.call();
+                    future = pool.submit(cooldownPhase);
                 }
             }
             // start new range of skierIds
@@ -102,8 +107,11 @@ public class PeakPhase implements Callable {
             startSkierId = endSkierId+1;
         }
         // grab total num of requests from cooldown phase and set it to the peak phase object
+        CooldownPhase result = future.get();
+
         this.setTotalNumOfSuccessfulRequests(this.totalNumOfSuccessfulRequests+ result.getTotalNumOfSuccessfulRequests());
         this.setTotalFailedRequests(this.totalFailedRequests + result.getTotalFailedRequests());
+        System.out.println("done with peak phase....");
         return this;
 
     }
@@ -160,6 +168,7 @@ public class PeakPhase implements Callable {
             this.totalFailedRequests += 1;
             this.totalNumOfSuccessfulRequests -= 1;
         }
+        System.out.println("peak phase" + response.body());
     }
 
     /**

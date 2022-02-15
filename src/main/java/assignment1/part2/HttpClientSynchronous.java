@@ -41,7 +41,7 @@ public class HttpClientSynchronous extends Thread {
         url = url + SERVERADDRESS + webapp;
 
         // three phases - each one sending a large number of lift rides to the server API
-        final Future<ArrayList<SystemStats>> future = pool.submit(new StartupPhase(httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
+        final Future<ArrayList<SystemStats>> future = pool.submit(new StartupPhase(pool, httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
 
         ArrayList<SystemStats> systemStats = future.get();
         pool.shutdown();

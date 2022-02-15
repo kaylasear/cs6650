@@ -97,6 +97,7 @@ public class CooldownPhase implements Callable {
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
+        System.out.println("done with cooldown phase....");
         return this;
     }
 
