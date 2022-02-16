@@ -55,7 +55,7 @@ public class HttpClientSynchronous extends Thread {
         }
 
         CsvWriter csvWriter = new CsvWriter();
-        csvWriter.writeToCsvFile(systemStats, "systemstats.csv");
+        //csvWriter.writeToCsvFile(systemStats, "systemstats.csv");
 
         // calculate response time stats
         ResultGenerator resultGenerator = new ResultGenerator(systemStats);

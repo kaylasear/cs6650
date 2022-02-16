@@ -73,6 +73,11 @@ public class StartupPhase implements Callable {
         range = Math.round(numskiers/(numThreadsInPhase));
     }
 
+
+    synchronized public void inc() {
+        this.totalNumOfSuccessfulRequests++;
+    }
+
     /**
      * Start the call to execute http requests with a start and end range of skierIds
      * @return
@@ -102,7 +107,7 @@ public class StartupPhase implements Callable {
                 }
 
                 counter += 1;
-                totalNumOfSuccessfulRequests += 1;
+                inc();
 
                 // start phase 2
                 if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
