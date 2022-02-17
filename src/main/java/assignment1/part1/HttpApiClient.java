@@ -1,5 +1,15 @@
 package assignment1.part1;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -7,15 +17,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
 
 public class HttpApiClient {
-    private static HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+//    private static HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+//            .connectTimeout(Duration.ofSeconds(10))
+//            .build();
 
     private static String url = "http://";
     private static final String port = ":8080";
@@ -33,8 +44,7 @@ public class HttpApiClient {
     private static final double PEAK_POST_VARIABLE = 0.6;
     private static final double COOL_POST_VARIABLE = 0.1;
 
-    private static final int MINERRORCODE = 400;
-    private static final int MAXERRORCODE = 599;
+    private static final int MINERRORCODE = 299;
 
     private static int NUMTHREADS;
     private static int NUMSKIERS;
@@ -51,16 +61,9 @@ public class HttpApiClient {
     private CountDownLatch endSignal;
     private CountDownLatch endPeak;
     private CountDownLatch endCool;
-    private int currentRequests = 0;
-
-    public synchronized void inc() {
-        totalSuccess++;
-    }
-
-    public int getSuccess() {
-        return totalSuccess;
-    }
-
+    private int peakRequests = 0;
+    private int startUpRequests = 0;
+    private int coolRequests = 0;
 
     public static void main(String[] args) throws InterruptedException {
         final HttpApiClient rmw = new HttpApiClient();
@@ -77,6 +80,7 @@ public class HttpApiClient {
 
         long start = System.currentTimeMillis();
         rmw.startSignal.countDown();
+        //rmw.startPeak.countDown();
 
         rmw.endSignal.await();
         rmw.endPeak.await();
@@ -85,7 +89,7 @@ public class HttpApiClient {
         long wallTime = ((finish - start)/1000);
 
 
-        System.out.println("Total successful requests: " + rmw.totalSuccess);
+        System.out.println("Total successful requests: " + (rmw.getSuccess()));
         System.out.println("Total failed requests: " + rmw.totalFailed);
         System.out.println("Wall Time in seconds: " + wallTime);
 
@@ -134,13 +138,23 @@ public class HttpApiClient {
                 int finalStartSkierId = startSkierId;
                 Runnable thread =  () -> {
                     try {
-                        while (counter.get() <= maxCalls) {
-                            // wait for the main thread to tell us to start
-                            rmw.startCool.await();
-                            System.out.println("running cool");
-                            rmw.executePost(finalStartSkierId, endSkierId, start, end);
-                            rmw.inc();
+                        rmw.startCool.await();
+//                        HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+//                                .connectTimeout(Duration.ofSeconds(10))
+//                                .build();
+                        RequestConfig requestConfig = RequestConfig.custom()
+                                .setConnectionRequestTimeout(5000)
+                                .setConnectTimeout(5000)
+                                .setSocketTimeout(5000)
+                                .build();
 
+                        CloseableHttpClient httpclient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
+                        while (counter.get() <= maxCalls) {
+
+                            // wait for the peak thread to tell us to start
+                            System.out.println("running cool");
+                            rmw.executePost(httpclient, finalStartSkierId, endSkierId, start, end);
+                            rmw.inc();
                             counter.getAndIncrement();
                         }
 
@@ -149,7 +163,7 @@ public class HttpApiClient {
                         // we've finished - let the main thread know
                         System.out.println("shutting cool");
                         rmw.endCool.countDown();
-                        return;
+                        //return;
                     }
                 };
                 new Thread(thread).start();
@@ -175,13 +189,22 @@ public class HttpApiClient {
 
                 Runnable thread =  () -> {
                     try {
+                        rmw.startPeak.await();
+                        RequestConfig requestConfig = RequestConfig.custom()
+                                .setConnectionRequestTimeout(5000)
+                                .setConnectTimeout(5000)
+                                .setSocketTimeout(5000)
+                                .build();
+
+                        CloseableHttpClient httpclient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
                         while (counter.get() <= maxCalls) {
+
                             // wait for the main thread to tell us to start
-                            rmw.startPeak.await();
                             //System.out.println("running peak");
-                            rmw.executePost(finalStartSkierId, endSkierId, start, end);
+                            rmw.executePost(httpclient, finalStartSkierId, endSkierId, start, end);
+                            //rmw.peakRequests++;
+                           rmw.incCurrent();
                             rmw.inc();
-                            rmw.incCurrent();
 
                             if (rmw.getCurrent() == Math.round(maxCalls*NUMTHREADS*0.2)) {
                                 System.out.println("starting cool");
@@ -194,7 +217,7 @@ public class HttpApiClient {
                         // we've finished - let the main thread know
                         System.out.println("shutting peak");
                         rmw.endPeak.countDown();
-                        return;
+                        //return;
                     }
                 };
                 new Thread(thread).start();
@@ -204,12 +227,28 @@ public class HttpApiClient {
 
     }
 
-    private synchronized void incCurrent() {
-        currentRequests++;
+    public synchronized void inc() {
+        totalSuccess++;
+    }
+
+    public int getSuccess() {
+        return totalSuccess;
+    }
+
+    private void incCurrent() {
+        peakRequests++;
     }
 
     private int getCurrent() {
-        return currentRequests;
+        return peakRequests;
+    }
+
+    private int getCoolRequests() {
+        return coolRequests;
+    }
+
+    private int getStartUpRequests(){
+        return startUpRequests;
     }
 
 
@@ -235,14 +274,22 @@ public class HttpApiClient {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                     try {
-
+                        rmw.startSignal.await();
+//                        HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+//                                .connectTimeout(Duration.ofSeconds(10))
+//                                .build();
+                        RequestConfig requestConfig = RequestConfig.custom()
+                                .setConnectionRequestTimeout(5000)
+                                .setConnectTimeout(5000)
+                                .setSocketTimeout(5000)
+                                .build();
+                        CloseableHttpClient httpclient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
                         while (counter.get() <= maxCalls) {
                             // wait for the main thread to tell us to start
-                            rmw.startSignal.await();
-                            rmw.executePost(finalStartSkierId, endSkierId, start, end);
+                            rmw.executePost(httpclient, finalStartSkierId, endSkierId, start, end);
                             rmw.inc();
 
-                        if (rmw.getSuccess() == (Math.round(maxCalls*finalStartupThreads*0.2))) {
+                        if (rmw.startUpRequests == (Math.round(maxCalls*finalStartupThreads*0.2))) {
                             System.out.println("starting peak");
                             rmw.startPeak.countDown();
                        }
@@ -253,7 +300,7 @@ public class HttpApiClient {
                         // we've finished - let the main thread know
                         System.out.println("shutting start");
                         rmw.endSignal.countDown();
-                        return;
+                        //return;
                     }
                 };
                 new Thread(thread).start();
@@ -262,7 +309,7 @@ public class HttpApiClient {
         }
     }
 
-    public void executePost(int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
+    public void executePost(CloseableHttpClient httpClient, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, NUMLIFTS);
         // time value from range of minutes passed to each thread (between start and end time)
@@ -277,7 +324,7 @@ public class HttpApiClient {
                 .replaceAll("\\{" + "skierId" + "\\}", String.valueOf(skierId));
 
         // build url
-        url = url + localVarPath;
+        String newUrl = buildURL(localVarPath);
 
         // json formatted data
         String json = new StringBuilder()
@@ -287,37 +334,79 @@ public class HttpApiClient {
                 .append("\"waitTime\":" + waitTime)
                 .append("}").toString();
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .uri(URI.create(url))
-                .setHeader("User-Agent", "Java 17 HttpClient Bot")
-                .header("Content-Type", "application/json")
-                .build();
+        HttpPost method = new HttpPost(newUrl);
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        method.setEntity(new StringEntity(json.toString()));
 
-        int status = response.statusCode();
+        CloseableHttpResponse response = httpClient.execute(method);
 
-        boolean isFailed = false;
+        try {
 
-        if (MINERRORCODE <= status && status <= MAXERRORCODE) {
-            isFailed = resendRequest(request);
+            int status = response.getStatusLine().getStatusCode();
+
+            HttpEntity entity = response.getEntity();
+            boolean isFailed = false;
+
+            if (MINERRORCODE <= status) {
+                isFailed = resendRequest(httpClient, method);
+            }
+
+            if (isFailed) {
+                totalFailed++;
+                totalSuccess--;
+            }
+//            if (entity != null) {
+//                // return it as a String
+//                String result = EntityUtils.toString(entity);
+//                System.out.println(result);
+//            }
+            } finally {
+            response.close();
         }
 
-        if (isFailed) {
-            totalFailed ++;
-            totalSuccess --;
-        }
-        System.out.println(Thread.currentThread() + response.body());
+
+//        // create a request
+//        HttpRequest request = HttpRequest.newBuilder(
+//                        URI.create(newUrl))
+//                .header("accept", "application/json")
+//                .POST(HttpRequest.BodyPublishers.ofString(json))
+//                .build();
+//
+//        try {
+//            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+//
+//            int status = response.statusCode();
+//
+//            boolean isFailed = false;
+//
+//            if (MINERRORCODE <= status) {
+//                isFailed = resendRequest(httpClient, request);
+//            }
+//            inc();
+//            if (isFailed) {
+//                totalFailed ++;
+//                totalSuccess --;
+//            }
+//        } catch (IOException e) {
+//            System.out.println(e);
+//            e.printStackTrace();
+//        }
+//        System.out.println(Thread.currentThread() + response.body());
     }
 
-    private boolean resendRequest(HttpRequest request) throws IOException, InterruptedException {
+    private String buildURL(String localVarPath) {
+        String base = url;
+        String newUrl = base + localVarPath;
+        return newUrl;
+    }
+
+    private boolean resendRequest(CloseableHttpClient httpClient, HttpPost request) throws IOException, InterruptedException {
         int count = 5;
         int status;
 
         for (int i = 0; i <= count; i ++) {
-            HttpResponse<String> response= httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            status = response.statusCode();
+            org.apache.http.HttpResponse response = httpClient.execute(request);
+            status = response.getStatusLine().getStatusCode();
 
             if (status < MINERRORCODE) {
                 return true;
