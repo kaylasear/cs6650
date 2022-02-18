@@ -1,4 +1,4 @@
-package assignment1.part2;
+package assignment1.part1.old;
 
 import assignment1.part2.model.SystemStats;
 
@@ -15,56 +15,61 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 /**
- * Class represents CoolDown Phase, which launches 10% of NUMTHREADS to send POST requests
+ * Class represents the StartUp Phase, will launch numThreads/4 threads
  */
-public class CooldownPhase implements Callable {
-    private HttpClient httpClient;
-
-    private int NUM_THREADS;
+public class StartupPhase implements Callable{
+    private final HttpClient httpClient;
+    private final int NUM_THREADS;
     private int numThreadsInPhase;
     private int numSkiers;
-    private int numLifts;
     private String url;
-
+    private int numLifts;
     private int startSkierId = 1;
     private int endSkierId;
-    private int startTime = 361;
-    private int endTime = 420;
+    private int startTime = 1;
+    private int endTime = 90;
 
-    private final double POST_VARIABLE = 0.1;
+    private final double POST_VARIABLE = 0.2;
     private int maxCalls;
     private int range;
 
     private static final int MINERRORCODE = 400;
     private static final int MAXERRORCODE = 599;
 
+
     private static String dayId = "5";
     private static String seasonId = "2019";
     private static String resortId = "1";
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
+    private ExecutorService pool;
 
     /**
-     * Constructs a CoolDown Phase object with httpclient, num of threads, num of skiers, url and num of lifts
+     * Constructs a StartUp Phase object with Httpclient, num of threads, num of skiers, url and num of lifts
      * Determine the range to assign skierIds
+     * @param pool
      * @param httpClient
-     * @param num_threads
-     * @param numSkiers
+     * @param numthreads
+     * @param numskiers
      * @param url
-     * @param numLifts
+     * @param numlifts
      */
-    public CooldownPhase(HttpClient httpClient, int num_threads, int numSkiers, String url, int numLifts) {
+    public StartupPhase(ExecutorService pool, HttpClient httpClient, int numthreads, int numskiers, String url, int numlifts) {
+        this.pool = pool;
         this.httpClient = httpClient;
-        this.NUM_THREADS = num_threads;
-        this.numThreadsInPhase = (int) Math.round(num_threads*0.10);
-        this.numSkiers = numSkiers;
-        this.url = url;
-        this.numLifts = numLifts;
+        this.NUM_THREADS = numthreads;
 
-        if (numThreadsInPhase == 0) {
-            this.numThreadsInPhase = 1;
+        if (numthreads == 1) {
+            this.numThreadsInPhase = numthreads;
+        } else {
+            this.numThreadsInPhase = Math.round(numthreads/4);
         }
-        range = numSkiers/numThreadsInPhase;
+
+        this.numSkiers = numskiers;
+        this.url = url;
+        this.numLifts = numlifts;
+
+        range = Math.round(numskiers/(numThreadsInPhase));
     }
 
     /**
@@ -74,26 +79,25 @@ public class CooldownPhase implements Callable {
      */
     @Override
     synchronized public ArrayList<SystemStats> call() throws Exception {
-        System.out.println("running cooldown phase....");
+        System.out.println("running startup phase....");
         int multiplier = 1;
-        ArrayList<SystemStats> stats = new ArrayList<>();
+        Future<ArrayList<SystemStats>> future = null;
+        ArrayList<SystemStats> listOne = new ArrayList<>();
 
         for (int i = 0; i < numThreadsInPhase; i++) {
             endSkierId = range*multiplier;
 
-            maxCalls = (int) (this.numLifts*POST_VARIABLE);
+            maxCalls = (int) ((this.numLifts*POST_VARIABLE) * (range));
             int counter = 1;
 
             while (counter <= this.maxCalls) {
-                // Each POST should randomly select:
-                // skierId from range of Ids, liftId, time value, waitTime
                 try {
                     double start = (double)System.currentTimeMillis();
                     HttpResponse response = executePostRequest();
                     double end = (double)System.currentTimeMillis();
 
                     SystemStats stat = getStats(response, start, end);
-                    stats.add(stat);
+                    listOne.add(stat);
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (InterruptedException e) {
@@ -103,12 +107,21 @@ public class CooldownPhase implements Callable {
                 counter += 1;
                 totalNumOfSuccessfulRequests += 1;
 
+                // start phase 2
+                if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
+                    PeakPhase peakPhase = new PeakPhase(pool, httpClient, NUM_THREADS, numSkiers, url, numLifts);
+                    future = pool.submit(peakPhase);
+                }
             }
             // start new range of skierIds
             multiplier += 1;
             startSkierId = endSkierId+1;
         }
-        return stats;
+        ArrayList<SystemStats> listTwo = future.get();
+        ArrayList<SystemStats> newList = new ArrayList<>(listOne);
+        newList.addAll(listTwo);
+        return newList;
+
     }
 
     /**
@@ -128,7 +141,8 @@ public class CooldownPhase implements Callable {
     }
 
     /**
-     * Execute a post request to create a lift ride object
+     * Execute a post request to create a lift ride object and return the http response
+     * to collect stats
      * @throws IOException
      * @throws InterruptedException
      */
@@ -179,6 +193,7 @@ public class CooldownPhase implements Callable {
             this.totalFailedRequests += 1;
             this.totalNumOfSuccessfulRequests -= 1;
         }
+
         return response;
     }
 
@@ -214,13 +229,9 @@ public class CooldownPhase implements Callable {
             }
         }
         return false;
-
     }
+
     /** Getters and Setters **/
-
-    public int getTotalNumOfSuccessfulRequests() {
-        return totalNumOfSuccessfulRequests;
-    }
 
     public int getTotalFailedRequests() {
         return totalFailedRequests;
@@ -230,24 +241,24 @@ public class CooldownPhase implements Callable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        CooldownPhase that = (CooldownPhase) o;
+        StartupPhase that = (StartupPhase) o;
         return NUM_THREADS == that.NUM_THREADS && numThreadsInPhase == that.numThreadsInPhase && numSkiers == that.numSkiers && numLifts == that.numLifts && startSkierId == that.startSkierId && endSkierId == that.endSkierId && startTime == that.startTime && endTime == that.endTime && Double.compare(that.POST_VARIABLE, POST_VARIABLE) == 0 && maxCalls == that.maxCalls && range == that.range && totalNumOfSuccessfulRequests == that.totalNumOfSuccessfulRequests && totalFailedRequests == that.totalFailedRequests && Objects.equals(httpClient, that.httpClient) && Objects.equals(url, that.url);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(httpClient, NUM_THREADS, numThreadsInPhase, numSkiers, numLifts, url, startSkierId, endSkierId, startTime, endTime, POST_VARIABLE, maxCalls, range, totalNumOfSuccessfulRequests, totalFailedRequests);
+        return Objects.hash(httpClient, NUM_THREADS, numThreadsInPhase, numSkiers, url, numLifts, startSkierId, endSkierId, startTime, endTime, POST_VARIABLE, maxCalls, range, totalNumOfSuccessfulRequests, totalFailedRequests);
     }
 
     @Override
     public String toString() {
-        return "CooldownPhase{" +
+        return "StartupPhase{" +
                 "httpClient=" + httpClient +
                 ", NUM_THREADS=" + NUM_THREADS +
                 ", numThreadsInPhase=" + numThreadsInPhase +
                 ", numSkiers=" + numSkiers +
-                ", numLifts=" + numLifts +
                 ", url='" + url + '\'' +
+                ", numLifts=" + numLifts +
                 ", startSkierId=" + startSkierId +
                 ", endSkierId=" + endSkierId +
                 ", startTime=" + startTime +

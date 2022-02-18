@@ -5,6 +5,7 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClients;
 
 import java.io.IOException;
@@ -84,6 +85,26 @@ public class Client {
 
     }
 
+    public synchronized void inc() {
+        totalSuccess++;
+    }
+
+    public synchronized int getSuccess() {
+        return totalSuccess;
+    }
+
+    private synchronized void incCurrent() {
+        peakRequests++;
+    }
+
+    private synchronized int getCurrent() {
+        return peakRequests;
+    }
+
+    private synchronized void incFail() {
+        totalFailed++;
+    }
+
     private int getFail() {
         return totalFailed;
     }
@@ -113,44 +134,53 @@ public class Client {
         }
     }
 
-    private void executeCooldownPhase() {
+    public void executeStartupPhase() {
         int startSkierId = 1;
-        int start = 361;
-        int end = 420;
-        int range = (int) (NUMSKIERS / (NUMTHREADS * 0.10));
-        int maxCalls = (int) ((NUMRUNS * COOL_POST_VARIABLE));
+        int start = 1;
+        int end = 90;
+        int startupThreads = NUMTHREADS / 4;
+
+        if (startupThreads == 0) {
+            startupThreads = 1;
+        }
+        int range = Math.round(NUMSKIERS / startupThreads);
+        int maxCalls = (int) ((NUMRUNS * START_POST_VARIABLE) * (range));
         int multiplier = 1;
 
-        for (int i = 0; i < NUMTHREADS * 0.10; i++) {
+        for (int i = 0; i < startupThreads; i++) {
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
-            CloseableHttpClient httpclient = HttpClients.createDefault();
+            CloseableHttpClient httpclient = HttpClients.custom().setRetryHandler(new DefaultHttpRequestRetryHandler(5, false)).build();
 
             int finalStartSkierId = startSkierId;
+
+            int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    startCool.await();
+
                     while (counter.get() <= maxCalls) {
-
-                        // wait for the peak thread to tell us to start
+                        // wait for the main thread to tell us to start
                         executePost(httpclient, finalStartSkierId, endSkierId, start, end);
-                        inc();
-                        counter.getAndIncrement();
 
+                        int current = getSuccess();
+                        if (current == (Math.round(maxCalls * finalStartupThreads * 0.2))) {
+                            startPeak.countDown();
+                        }
+                        counter.getAndIncrement();
                     }
                     httpclient.close();
-                } catch (InterruptedException | IOException e) {
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting cool");
-                    endCool.countDown();
+                    System.out.println("shutting start");
+                    endSignal.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
         }
-
     }
 
     private void executePeakPhase() {
@@ -200,75 +230,51 @@ public class Client {
 
     }
 
-    public synchronized void inc() {
-        totalSuccess++;
-    }
-
-    public synchronized int getSuccess() {
-        return totalSuccess;
-    }
-
-    private synchronized void incCurrent() {
-        peakRequests++;
-    }
-
-    private synchronized int getCurrent() {
-        return peakRequests;
-    }
-
-    public void executeStartupPhase() {
+    private void executeCooldownPhase() {
         int startSkierId = 1;
-        int start = 1;
-        int end = 90;
-        int startupThreads = NUMTHREADS / 4;
-
-        if (startupThreads == 0) {
-            startupThreads = 1;
-        }
-        int range = Math.round(NUMSKIERS / startupThreads);
-        int maxCalls = (int) ((NUMRUNS * START_POST_VARIABLE) * (range));
+        int start = 361;
+        int end = 420;
+        int range = (int) (NUMSKIERS / (NUMTHREADS * 0.10));
+        int maxCalls = (int) ((NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
 
-        for (int i = 0; i < startupThreads; i++) {
+        for (int i = 0; i < NUMTHREADS * 0.10; i++) {
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
             CloseableHttpClient httpclient = HttpClients.createDefault();
 
             int finalStartSkierId = startSkierId;
-
-            int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    //rmw.startSignal.await();
+                    startCool.await();
                     while (counter.get() <= maxCalls) {
-                        // wait for the main thread to tell us to start
+
+                        // wait for the peak thread to tell us to start
                         executePost(httpclient, finalStartSkierId, endSkierId, start, end);
                         inc();
-
-                        if (getSuccess() == (Math.round(maxCalls * finalStartupThreads * 0.2))) {
-                            startPeak.countDown();
-                        }
                         counter.getAndIncrement();
+
                     }
                     httpclient.close();
-                } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
+                } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting start");
-                    endSignal.countDown();
+                    System.out.println("shutting cool");
+                    endCool.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
         }
+
     }
+
 
     public void executePost(CloseableHttpClient client, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
+        // generate random values for skierId, liftId, time, waitTime
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, NUMLIFTS);
-        // time value from range of minutes passed to each thread (between start and end time)
         int time = generateRandomValue(startTime, endTime);
         int waitTime = generateRandomValue(0, 10);
 
@@ -290,7 +296,7 @@ public class Client {
                 .append("\"waitTime\":" + waitTime)
                 .append("}").toString();
 
-
+        // execute POST method
         HttpPost method = new HttpPost(newUrl);
         method.setEntity(new StringEntity(json.toString()));
         CloseableHttpResponse response = client.execute(method);
@@ -305,69 +311,12 @@ public class Client {
             if (MINERRORCODE <= status) {
                 isFailed = resendRequest(client, method);
             }
-            if (isFailed) {
-                incFail();
-            }
-            if (entity != null) {
-                // return it as a String
-//                String result = EntityUtils.toString(entity);
-//                System.out.println(result);
-                EntityUtils.consume(entity);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            response.close();
-            //method.releaseConnection();
-        }
-    }
-
-
-    public void executePostPeak(CloseableHttpClient client, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
-        int skierId = generateRandomValue(startSkierId, endSkierId);
-        int liftId = generateRandomValue(0, NUMLIFTS);
-        // time value from range of minutes passed to each thread (between start and end time)
-        int time = generateRandomValue(startTime, endTime);
-        int waitTime = generateRandomValue(0, 10);
-
-        // create path and map variables
-        String localVarPath = "/skiers/{resortId}/seasons/{seasonId}/days/{dayId}/skiers/{skierId}"
-                .replaceAll("\\{resortId\\}", resortId)
-                .replaceAll("\\{seasonId\\}", seasonId)
-                .replaceAll("\\{dayId\\}", dayId)
-                .replaceAll("\\{" + "skierId" + "\\}", String.valueOf(skierId));
-
-        // build url
-        String newUrl = buildURL(localVarPath);
-
-        // json formatted data
-        String json = new StringBuilder()
-                .append("{")
-                .append("\"time\":" + time + " ,")
-                .append("\"liftId\":" + liftId + " ,")
-                .append("\"waitTime\":" + waitTime)
-                .append("}").toString();
-
-        HttpPost method = new HttpPost(newUrl);
-        method.setEntity(new StringEntity(json.toString()));
-        CloseableHttpResponse response = client.execute(method);
-
-        try {
-
-            int status = response.getStatusLine().getStatusCode();
-
-            HttpEntity entity = response.getEntity();
-            boolean isFailed = false;
-
-            if (MINERRORCODE <= status) {
-                isFailed = resendRequest(client, method);
-            }
-
             if (isFailed) {
                 incFail();
             } else {
                 inc();
             }
+            // print response body
             if (entity != null) {
                 // return it as a String
 //                String result = EntityUtils.toString(entity);
@@ -378,92 +327,36 @@ public class Client {
             e.printStackTrace();
         } finally {
             response.close();
-            //method.releaseConnection();
+            method.releaseConnection();
         }
     }
 
-
-    public void executePostCool(CloseableHttpClient client, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
-        int skierId = generateRandomValue(startSkierId, endSkierId);
-        int liftId = generateRandomValue(0, NUMLIFTS);
-        // time value from range of minutes passed to each thread (between start and end time)
-        int time = generateRandomValue(startTime, endTime);
-        int waitTime = generateRandomValue(0, 10);
-
-        // create path and map variables
-        String localVarPath = "/skiers/{resortId}/seasons/{seasonId}/days/{dayId}/skiers/{skierId}"
-                .replaceAll("\\{resortId\\}", resortId)
-                .replaceAll("\\{seasonId\\}", seasonId)
-                .replaceAll("\\{dayId\\}", dayId)
-                .replaceAll("\\{" + "skierId" + "\\}", String.valueOf(skierId));
-
-        // build url
-        String newUrl = buildURL(localVarPath);
-
-        // json formatted data
-        String json = new StringBuilder()
-                .append("{")
-                .append("\"time\":" + time + " ,")
-                .append("\"liftId\":" + liftId + " ,")
-                .append("\"waitTime\":" + waitTime)
-                .append("}").toString();
-
-
-
-        HttpPost method = new HttpPost(newUrl);
-        method.setEntity(new StringEntity(json.toString()));
-        CloseableHttpResponse response = client.execute(method);
-
-        try {
-
-            int status = response.getStatusLine().getStatusCode();
-
-            HttpEntity entity = response.getEntity();
-            boolean isFailed = false;
-
-            if (MINERRORCODE <= status) {
-                isFailed = resendRequest(client, method);
-            }
-
-            if (isFailed) {
-                incFail();
-            } else {
-                inc();
-            }
-            if (entity != null) {
-                // return it as a String
-//                String result = EntityUtils.toString(entity);
-//                System.out.println(result);
-                EntityUtils.consume(entity);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            response.close();
-        }
-    }
-
-
-
-    private synchronized void incFail() {
-        totalFailed++;
-    }
-
+    /**
+     * Helper method to build URL path
+     * @param localVarPath
+     * @return new url
+     */
     private String buildURL(String localVarPath) {
         String base = url;
         String newUrl = base + localVarPath;
         return newUrl;
     }
 
+    /**
+     * Resend the request up to 5 times if status code 4XX - 5XX
+     * @param httpClient
+     * @param request
+     * @return true if OK, false otherwise
+     * @throws IOException
+     * @throws InterruptedException
+     */
     private boolean resendRequest(CloseableHttpClient httpClient, HttpPost request) throws IOException, InterruptedException {
         int count = 5;
         int status;
 
         for (int i = 0; i <= count; i ++) {
             CloseableHttpResponse response = httpClient.execute(request);
-//            int response = httpClient.executeMethod(request);
             status = response.getStatusLine().getStatusCode();
-//            status = response.statusCode();
 
             if (status < MINERRORCODE) {
                 return true;
@@ -472,11 +365,16 @@ public class Client {
         return false;
     }
 
+    /**
+     * Helper method to generate random value
+     * @param startValue
+     * @param endValue
+     * @return a random value
+     */
     private int generateRandomValue(int startValue, int endValue) {
         SecureRandom random = new SecureRandom();
         int n = random.nextInt((endValue-startValue)+1)+startValue;
         return n;
     }
-
 
 }

@@ -30,34 +30,34 @@ public class HttpClientSynchronous extends Thread {
 
     public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
         // check args = [numThreads, numSkiers, numLifts, meanNumOfLiftsPerDay, serverAddress]
-        validateArguments(args);
-
-        // start thread pool
-        ExecutorService pool = Executors.newFixedThreadPool(NUMTHREADS);
-        url = url + SERVERADDRESS + webapp;
-
-        long start = System.currentTimeMillis();
-        // three phases - each one sending a large number of lift rides to the server API
-        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(pool, NUMTHREADS, NUMSKIERS, url, NUMLIFTS, MEANNUMLIFTSPERDAY));
-
-        int success = future.get().get(0);
-        int failures = future.get().get(1);
-        pool.shutdown();
-
-        try {
-            pool.awaitTermination(1000, TimeUnit.SECONDS);
-            long finish = System.currentTimeMillis();
-            long wallTime = (finish - start);
-
-            System.out.println("Total successful requests: " + success);
-            System.out.println("Total failed requests: " + failures);
-            System.out.println("Wall Time in seconds: " + wallTime/1000);
-
-            double throughout = (double) success/(wallTime/1000);
-            System.out.println("Total throughput: " + throughout);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+//        validateArguments(args);
+//
+//        // start thread pool
+//        ExecutorService pool = Executors.newFixedThreadPool(NUMTHREADS);
+//        url = url + SERVERADDRESS + webapp;
+//
+//        long start = System.currentTimeMillis();
+//        // three phases - each one sending a large number of lift rides to the server API
+//        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(pool, NUMTHREADS, NUMSKIERS, url, NUMLIFTS, MEANNUMLIFTSPERDAY));
+//
+//        int success = future.get().get(0);
+//        int failures = future.get().get(1);
+//        pool.shutdown();
+//
+//        try {
+//            pool.awaitTermination(1000, TimeUnit.SECONDS);
+//            long finish = System.currentTimeMillis();
+//            long wallTime = (finish - start);
+//
+//            System.out.println("Total successful requests: " + success);
+//            System.out.println("Total failed requests: " + failures);
+//            System.out.println("Wall Time in seconds: " + wallTime/1000);
+//
+//            double throughout = (double) success/(wallTime/1000);
+//            System.out.println("Total throughput: " + throughout);
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
 
     }
 

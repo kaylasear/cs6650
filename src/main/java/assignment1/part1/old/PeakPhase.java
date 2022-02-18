@@ -1,4 +1,4 @@
-package assignment1.part2;
+package assignment1.part1.old;
 
 import assignment1.part2.model.SystemStats;
 

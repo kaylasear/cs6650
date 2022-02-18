@@ -10,23 +10,19 @@ import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class represents the StartUp Phase, will launch numThreads/4 threads
  */
-public class StartupPhase implements Callable {
-    private final int NUM_THREADS;
+public class StartupPhase implements Runnable {
     private final int numRuns;
     private int numThreadsInPhase;
     private int numSkiers;
     private String url;
     private int numLifts;
-    private int startSkierId = 1;
+    private int startSkierId;
     private int endSkierId;
     private int startTime = 1;
     private int endTime = 90;
@@ -36,7 +32,6 @@ public class StartupPhase implements Callable {
     private int range;
 
     private static final int MINERRORCODE = 400;
-    private static final int MAXERRORCODE = 599;
 
 
     private static String dayId = "5";
@@ -44,21 +39,17 @@ public class StartupPhase implements Callable {
     private static String resortId = "1";
     private int totalNumOfSuccessfulRequests = 0;
     private int totalFailedRequests = 0;
-    private ExecutorService pool;
 
 
     /**
      * Constructs a StartUp Phase object with Httpclient, num of threads, num of skiers, url and num of lifts
      * Determine the range to assign skierIds
-     * @param pool
      * @param numthreads
      * @param numskiers
      * @param url
-     * @param NUMLIFTS
      * @param numlifts
      */
-    public StartupPhase(ExecutorService pool, int numthreads, int numskiers, String url, int numlifts, int numRuns) {
-        this.NUM_THREADS = numthreads;
+    public StartupPhase(int numthreads, int numskiers, String url, int numlifts, int numRuns) {
         this.numThreadsInPhase = numthreads;
 
 //        if (numthreads == 1) {
@@ -70,7 +61,6 @@ public class StartupPhase implements Callable {
         this.numSkiers = numskiers;
         this.url = url;
         this.numLifts = numlifts;
-        this.pool = pool;
         this.numRuns = numRuns;
 
         range = Math.round(numskiers/(numThreadsInPhase));
@@ -81,56 +71,32 @@ public class StartupPhase implements Callable {
         this.totalNumOfSuccessfulRequests++;
     }
 
-    /**
-     * Start the call to execute http requests with a start and end range of skierIds
-     * @return
-     * @throws Exception
-     */
-    @Override
-    synchronized public ArrayList<Integer> call() throws Exception {
-        System.out.println("running startup phase....");
-        Future<PeakPhase> future = null;
-        //PeakPhase result  = null;
-        int multiplier = 1;
-        maxCalls = (int) ((this.numRuns*POST_VARIABLE) * (range));
+    public int getTotalNumOfSuccessfulRequests() {
+        return this.totalNumOfSuccessfulRequests;
+    }
 
+    public void run() {
+        CloseableHttpClient httpclient = HttpClients.createDefault();
+        AtomicInteger counter = new AtomicInteger(1);
 
-        for (int i = 0; i < numThreadsInPhase; i++) {
-            CloseableHttpClient httpClient = HttpClients.createDefault();
-            endSkierId = range*multiplier;
+        while (counter.get() <= maxCalls) {
 
-            int counter = 1;
-
-            while (counter <= this.maxCalls) {
-                try {
-                    executePostRequest(httpClient);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                counter += 1;
-                inc();
-
-                // start phase 2
-//                if (totalNumOfSuccessfulRequests == Math.round(((maxCalls*numThreadsInPhase)*.20))) {
-//                    PeakPhase peakPhase = new PeakPhase(pool, httpClient, NUM_THREADS, numSkiers, url, numLifts);
-//                    future = pool.submit(peakPhase);
-//                    //result = peakPhase.call();
-//                }
+            try {
+                executePostRequest(httpclient);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-            httpClient.close();
-            // start new range of skierIds
-            multiplier += 1;
-            startSkierId = endSkierId+1;
-        }
-//        PeakPhase peakPhase = future.get();
-//        int totalRequests = this.totalNumOfSuccessfulRequests + peakPhase.getTotalNumOfSuccessfulRequests();
-//        int failedRequests = this.totalFailedRequests + peakPhase.getTotalFailedRequests();
-        ArrayList<Integer> resultList = new ArrayList<>(Arrays.asList(this.totalNumOfSuccessfulRequests, this.totalFailedRequests));
-        return resultList;
 
+            //inc();
+            counter.getAndIncrement();
+        }
+        try {
+            httpclient.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
