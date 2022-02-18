@@ -1,9 +1,9 @@
 package assignment1.part1.old;
 
-import java.io.IOException;
-import java.net.http.HttpClient;
+import assignment1.part1.StartupPhase;
 
-import java.time.Duration;
+import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.concurrent.*;
 
@@ -11,9 +11,6 @@ import java.util.concurrent.*;
  * Class represents a HttpClient that sends requests to API server
  */
 public class HttpClientSynchronous extends Thread {
-    private static HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2)
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
 
     private static String url = "http://";
     private static final String webapp = "/assignment1";
@@ -41,7 +38,7 @@ public class HttpClientSynchronous extends Thread {
 
         long start = System.currentTimeMillis();
         // three phases - each one sending a large number of lift rides to the server API
-        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(pool, httpClient, NUMTHREADS, NUMSKIERS, url, NUMLIFTS));
+        final Future<ArrayList<Integer>> future = pool.submit(new StartupPhase(pool, NUMTHREADS, NUMSKIERS, url, NUMLIFTS, MEANNUMLIFTSPERDAY));
 
         int success = future.get().get(0);
         int failures = future.get().get(1);

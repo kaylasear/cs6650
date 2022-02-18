@@ -60,7 +60,7 @@ public class ResultGenerator {
         if (responseTimes.size() % 2 == 0) {
             this.medianResponseTime = (responseTimes.get(responseTimes.size()/2) + responseTimes.get((responseTimes.size()/2)-1)) / 2;
         } else {
-            this.medianResponseTime = responseTimes.get(responseTimes.size()-1/2);
+            this.medianResponseTime = responseTimes.get((responseTimes.size()/2)-1);
         }
 
     }
