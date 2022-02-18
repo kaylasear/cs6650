@@ -18,20 +18,19 @@ public class ResultGenerator {
     private double minResponseTime;
     private double maxResponseTime;
 
-    private ArrayList<Double> responseTimes;
+    private ArrayList<Double> responseTimes = new ArrayList<>();
 
     public ResultGenerator(ArrayList<SystemStats> systemStats) {
         this.systemStats = systemStats;
-        this.responseTimes = getResponseTimes();
     }
 
     /**
      * Calculate results from all three phases
      */
     public void generateResults() {
+        this.responseTimes = getResponseTimes();
         calculateMean();
         calculateMedian();
-        calculateThroughput();
         calculatep99();
         calculateMin();
         calculateMax();
@@ -81,14 +80,6 @@ public class ResultGenerator {
         return responseTimes;
     }
 
-    /**
-     * Calculate the throughput = total num of requests/wall time
-     */
-    private void calculateThroughput() {
-        double wallTime = getWallTime();
-
-        this.throughput = this.responseTimes.size()/wallTime;
-    }
 
     /**
      * Calculate the wall time in seconds by adding up all the response times
@@ -155,7 +146,7 @@ public class ResultGenerator {
         return throughput;
     }
 
-    public void setThroughput(int throughput) {
+    public void setThroughput(double throughput) {
         this.throughput = throughput;
     }
 

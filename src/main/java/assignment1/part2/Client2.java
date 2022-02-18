@@ -56,7 +56,7 @@ public class Client2 {
 
     public static void main(String[] args) throws InterruptedException {
         final Client2 rmw = new Client2();
-        rmw.validateArguments(args);
+        rmw.validateArguments(args); // check and assign arguments
 
         url = url + SERVERADDRESS + port + webapp;
 
@@ -81,14 +81,15 @@ public class Client2 {
         System.out.println("Total failed requests: " + rmw.getFail());
         System.out.println("Wall Time in seconds: " + wallTime);
 
-        double throughout = (double) rmw.totalSuccess / wallTime;
-        System.out.println("Total throughput: " + throughout);
+        double throughput = (double) rmw.totalSuccess / wallTime;
+        System.out.println("Total throughput: " + throughput);
 
         CsvWriter csvWriter = new CsvWriter();
-        csvWriter.writeToCsvFile(rmw.systemStatsArrayList, "systemstats_256T.csv");
+        csvWriter.writeToCsvFile(rmw.systemStatsArrayList, "systemstats_64T.csv");
 
         // calculate response time stats
         ResultGenerator resultGenerator = new ResultGenerator(rmw.systemStatsArrayList);
+        resultGenerator.setThroughput(throughput);
         resultGenerator.generateResults();
         System.out.println(resultGenerator);
 
@@ -174,7 +175,6 @@ public class Client2 {
                         response.close();
                         double endTime = (double)System.currentTimeMillis();
 
-                        inc();
                         addStats(response, startTime, endTime);
                         int current = getSuccess();
 
@@ -218,12 +218,10 @@ public class Client2 {
                     startPeak.await();
                     System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
-                        // wait for the main thread to tell us to start
-                        //System.out.println("running peak");
+
                         double startTime = (double)System.currentTimeMillis();
                         CloseableHttpResponse response = executePost(httpclient, finalStartSkierId, endSkierId, start, end);
                         double endTime = (double)System.currentTimeMillis();
-                        inc();
                         incCurrent();
 
                         addStats(response, startTime, endTime);
@@ -266,14 +264,13 @@ public class Client2 {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
+                    // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
 
-                        // wait for the peak thread to tell us to start
                         double startTime = (double)System.currentTimeMillis();
                         CloseableHttpResponse response = executePost(httpclient, finalStartSkierId, endSkierId, start, end);
                         double endTime = (double)System.currentTimeMillis();
-                        inc();
                         counter.getAndIncrement();
 
                         addStats(response, startTime, endTime);
@@ -351,6 +348,8 @@ public class Client2 {
             }
             if (isFailed) {
                 incFail();
+            } else {
+                inc();
             }
             // print response body
             if (entity != null) {
@@ -361,11 +360,9 @@ public class Client2 {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            //method.releaseConnection();
-            return response;
-
         }
+        method.releaseConnection();
+        return response;
     }
 
     /**

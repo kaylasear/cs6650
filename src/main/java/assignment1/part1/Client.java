@@ -159,10 +159,11 @@ public class Client {
                 try {
 
                     while (counter.get() <= maxCalls) {
-                        // wait for the main thread to tell us to start
+                        // execute the POST requests
                         executePost(httpclient, finalStartSkierId, endSkierId, start, end);
 
                         int current = getSuccess();
+                        // 20% requests done, signal the Peak threads to start
                         if (current == (Math.round(maxCalls * finalStartupThreads * 0.2))) {
                             startPeak.countDown();
                         }
@@ -200,15 +201,15 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
+                    // wait for the start up phase to signal us
                     startPeak.await();
                     System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
-                        // wait for the main thread to tell us to start
-                        //System.out.println("running peak");
+                        // execute the POST requests
                         executePost(httpclient, finalStartSkierId, endSkierId, start, end);
-                        inc();
                         incCurrent();
 
+                        // 20% requests done, signal the Peak threads to start
                         if (getCurrent() == Math.round(maxCalls * NUMTHREADS * 0.2)) {
                             System.out.println("starting cool");
                             startCool.countDown();
@@ -246,15 +247,15 @@ public class Client {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
+                    // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
 
-                        // wait for the peak thread to tell us to start
                         executePost(httpclient, finalStartSkierId, endSkierId, start, end);
-                        inc();
                         counter.getAndIncrement();
 
                     }
+                    // close the connection
                     httpclient.close();
                 } catch (InterruptedException | IOException e) {
                 } finally {
@@ -325,10 +326,10 @@ public class Client {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            response.close();
-            method.releaseConnection();
         }
+        response.close();
+        method.releaseConnection();
+
     }
 
     /**
