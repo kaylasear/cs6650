@@ -5,13 +5,14 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClients;
 
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.util.EntityUtils;
 
 
@@ -43,7 +44,7 @@ public class Client {
 
     private int totalSuccess;
     private int totalFailed = 0;
-    private final CountDownLatch startSignal = new CountDownLatch(1);
+
     private final CountDownLatch startPeak = new CountDownLatch(1);
     private final CountDownLatch startCool = new CountDownLatch(1);
 
@@ -53,7 +54,7 @@ public class Client {
     private int peakRequests = 0;
 
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, IOException {
         final Client rmw = new Client();
         validateArguments(args);
 
@@ -68,7 +69,6 @@ public class Client {
         rmw.executeStartupPhase();
         rmw.executePeakPhase();
         rmw.executeCooldownPhase();
-        //rmw.startSignal.countDown();
 
         rmw.endSignal.await();
         rmw.endPeak.await();
@@ -134,7 +134,7 @@ public class Client {
         }
     }
 
-    public void executeStartupPhase() {
+    public void executeStartupPhase() throws IOException {
         int startSkierId = 1;
         int start = 1;
         int end = 90;
@@ -147,20 +147,28 @@ public class Client {
         int maxCalls = (int) ((NUMRUNS * START_POST_VARIABLE) * (range));
         int multiplier = 1;
 
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        //increase max total connections to num threads
+        cm.setMaxTotal(startupThreads);
+
+        // set max connections per route to num threads
+        cm.setDefaultMaxPerRoute(startupThreads);
+        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
+
         for (int i = 0; i < startupThreads; i++) {
+
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
-            CloseableHttpClient httpclient = HttpClients.custom().setRetryHandler(new DefaultHttpRequestRetryHandler(5, false)).build();
 
             int finalStartSkierId = startSkierId;
 
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-
+//                    CloseableHttpClient httpclient = HttpClients.createDefault();
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
-                        executePost(httpclient, finalStartSkierId, endSkierId, start, end);
+                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
 
                         int current = getSuccess();
                         // 20% requests done, signal the Peak threads to start
@@ -169,7 +177,6 @@ public class Client {
                         }
                         counter.getAndIncrement();
                     }
-                    httpclient.close();
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 } finally {
@@ -181,10 +188,11 @@ public class Client {
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
+
         }
     }
 
-    private void executePeakPhase() {
+    private void executePeakPhase() throws IOException {
         int startSkierId = 1;
         int start = 91;
         int end = 360;
@@ -192,11 +200,20 @@ public class Client {
         int maxCalls = (int) ((NUMRUNS * PEAK_POST_VARIABLE) * (range));
         int multiplier = 1;
 
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        //increase max total connections to num threads
+        cm.setMaxTotal(NUMTHREADS);
+
+        // set max connections per route to num threads
+        cm.setDefaultMaxPerRoute(NUMTHREADS);
+        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
+
+
         for (int i = 0; i < NUMTHREADS; i++) {
+
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
             int finalStartSkierId = startSkierId;
-            CloseableHttpClient httpclient = HttpClients.createDefault();
 
             int finalI = i;
             Runnable thread = () -> {
@@ -206,7 +223,7 @@ public class Client {
                     System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
-                        executePost(httpclient, finalStartSkierId, endSkierId, start, end);
+                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
                         incCurrent();
 
                         // 20% requests done, signal the Peak threads to start
@@ -216,22 +233,22 @@ public class Client {
                         }
                         counter.getAndIncrement();
                     }
-                    httpclient.close();
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting peak " + finalI);
+                    System.out.println("shutting peak");
                     endPeak.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
+
         }
 
     }
 
-    private void executeCooldownPhase() {
+    private void executeCooldownPhase() throws IOException {
         int startSkierId = 1;
         int start = 361;
         int end = 420;
@@ -239,10 +256,18 @@ public class Client {
         int maxCalls = (int) ((NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
 
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        //increase max total connections to num threads
+        cm.setMaxTotal((int) (NUMTHREADS * 0.10));
+
+        // set max connections per route to num threads
+        cm.setDefaultMaxPerRoute((int) (NUMTHREADS * 0.10));
+        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
+
         for (int i = 0; i < NUMTHREADS * 0.10; i++) {
+
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
-            CloseableHttpClient httpclient = HttpClients.createDefault();
 
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
@@ -251,12 +276,10 @@ public class Client {
                     startCool.await();
                     while (counter.get() <= maxCalls) {
 
-                        executePost(httpclient, finalStartSkierId, endSkierId, start, end);
+                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
                         counter.getAndIncrement();
 
                     }
-                    // close the connection
-                    httpclient.close();
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
@@ -267,6 +290,7 @@ public class Client {
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
+
         }
 
     }
@@ -299,7 +323,7 @@ public class Client {
 
         // execute POST method
         HttpPost method = new HttpPost(newUrl);
-        method.setEntity(new StringEntity(json.toString()));
+        method.setEntity(new StringEntity(json));
         CloseableHttpResponse response = client.execute(method);
 
         try {
@@ -309,6 +333,7 @@ public class Client {
             HttpEntity entity = response.getEntity();
             boolean isFailed = false;
 
+            // resend request if 4XX or 5XX
             if (MINERRORCODE <= status) {
                 isFailed = resendRequest(client, method);
             }
@@ -322,14 +347,13 @@ public class Client {
                 // return it as a String
 //                String result = EntityUtils.toString(entity);
 //                System.out.println(result);
-                EntityUtils.consume(entity);
             }
+            EntityUtils.consume(entity);
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            response.close();
         }
-        response.close();
-        method.releaseConnection();
-
     }
 
     /**
