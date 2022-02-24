@@ -1,18 +1,24 @@
 package assignment1.part1;
 
+import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpEntity;
+import org.apache.http.NoHttpResponseException;
+import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.HttpClients;
 
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 
 
@@ -52,6 +58,9 @@ public class Client {
     private CountDownLatch endPeak;
     private CountDownLatch endCool;
     private int peakRequests = 0;
+    private Logger LOGGER = Logger.getLogger(Client.class.getName());
+    private int expectedRequests;
+
 
 
     public static void main(String[] args) throws InterruptedException, IOException {
@@ -77,7 +86,7 @@ public class Client {
         long wallTime = ((finish - start) / 1000);
 
         System.out.println("Total successful requests: " + (rmw.getSuccess()));
-        System.out.println("Total failed requests: " + rmw.getFail());
+        System.out.println("Total failed requests: " + (rmw.expectedRequests - rmw.getSuccess()));
         System.out.println("Wall Time in seconds: " + wallTime);
 
         double throughout = (double) rmw.totalSuccess / wallTime;
@@ -146,6 +155,7 @@ public class Client {
         int range = Math.round(NUMSKIERS / startupThreads);
         int maxCalls = (int) ((NUMRUNS * START_POST_VARIABLE) * (range));
         int multiplier = 1;
+        expectedRequests = expectedRequests + (maxCalls*startupThreads);
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         //increase max total connections to num threads
@@ -153,7 +163,7 @@ public class Client {
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute(startupThreads);
-        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
+
 
         for (int i = 0; i < startupThreads; i++) {
 
@@ -165,6 +175,20 @@ public class Client {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
+                        @Override
+                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
+                            if (i > 3) {
+                                LOGGER.warning("Maximum tries reached for client http pool ");
+                                return false;
+                            }
+                            if (e instanceof NoHttpResponseException) {
+                                LOGGER.warning("No response from server on " + i + " call");
+                                return true;
+                            }
+                            return false;
+                        }
+                    }).build();
 //                    CloseableHttpClient httpclient = HttpClients.createDefault();
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
@@ -199,6 +223,7 @@ public class Client {
         int range = (NUMSKIERS / NUMTHREADS);
         int maxCalls = (int) ((NUMRUNS * PEAK_POST_VARIABLE) * (range));
         int multiplier = 1;
+        expectedRequests = expectedRequests + (maxCalls*NUMTHREADS);
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         //increase max total connections to num threads
@@ -206,8 +231,6 @@ public class Client {
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute(NUMTHREADS);
-        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
-
 
         for (int i = 0; i < NUMTHREADS; i++) {
 
@@ -218,6 +241,20 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
+                        @Override
+                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
+                            if (i > 3) {
+                                LOGGER.warning("Maximum tries reached for client http pool ");
+                                return false;
+                            }
+                            if (e instanceof NoHttpResponseException) {
+                                LOGGER.warning("No response from server on " + i + " call");
+                                return true;
+                            }
+                            return false;
+                        }
+                    }).build();
                     // wait for the start up phase to signal us
                     startPeak.await();
                     System.out.println("starting peak");
@@ -255,16 +292,19 @@ public class Client {
         int range = (int) (NUMSKIERS / (NUMTHREADS * 0.10));
         int maxCalls = (int) ((NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
+        expectedRequests = (int) (expectedRequests + (maxCalls*Math.round(NUMTHREADS*0.10)));
+
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+
         //increase max total connections to num threads
         cm.setMaxTotal((int) (NUMTHREADS * 0.10));
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute((int) (NUMTHREADS * 0.10));
-        CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).build();
 
-        for (int i = 0; i < NUMTHREADS * 0.10; i++) {
+
+        for (int i = 0; i < Math.round(NUMTHREADS * 0.10); i++) {
 
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
@@ -272,11 +312,25 @@ public class Client {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
+                        @Override
+                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
+                            if (i > 3) {
+                                LOGGER.warning("Maximum tries reached for client http pool ");
+                                return false;
+                            }
+                            if (e instanceof NoHttpResponseException) {
+                                LOGGER.warning("No response from server on " + i + " call");
+                                return true;
+                            }
+                            return false;
+                        }
+                    }).build();
                     // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
 
-                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
+                        executePost(null, finalStartSkierId, endSkierId, start, end);
                         counter.getAndIncrement();
 
                     }
@@ -351,9 +405,12 @@ public class Client {
             EntityUtils.consume(entity);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            response.close();
         }
+
+//        } finally {
+//            response.close();
+//            method.releaseConnection();
+//        }
     }
 
     /**
