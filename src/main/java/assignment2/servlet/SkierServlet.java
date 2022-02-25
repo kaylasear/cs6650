@@ -4,7 +4,15 @@ import assignment1.part1.model.LiftRide;
 import assignment1.part1.model.ResponseMsg;
 import assignment1.part1.model.SkierVertical;
 import assignment1.part1.model.SkierVerticalResorts;
+import com.github.fge.jsonschema.core.exceptions.ProcessingException;
+import com.github.fge.jsonschema.core.report.ProcessingReport;
 import com.google.gson.Gson;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.github.fge.jackson.JsonLoader;
+import com.github.fge.jsonschema.main.JsonSchemaFactory;
+import com.github.fge.jsonschema.main.JsonValidator;
+
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -116,6 +124,7 @@ public class SkierServlet extends HttpServlet {
 
     }
 
+
     private boolean isUrlValid(String[] urlPath) {
         // urlPath = "skiers/{skierId}/vertical
         if (urlPath.length == urlPathVerticalLength) {
@@ -141,17 +150,58 @@ public class SkierServlet extends HttpServlet {
         }
 
         String[] urlParts = urlPath.split("/");
-        // and now validate url path and return the response status code
-        // (and maybe also some value if input is valid)
-
-        if (!isUrlValid(urlParts)) {
+        // and now validate url path & JSON payload and return the response status code
+        if (!isUrlValid(urlParts) || !validateJson(req)) {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         } else {
             res.setStatus(HttpServletResponse.SC_OK);
             // do any sophisticated processing with urlParts which contains all the url params
+            // TODO: format incoming data and send it as a payload to queue
             processRequest(req, res, urlParts);
 
         }
+    }
+
+    /**
+     * Validate the JSON data from request body according to JSON schema
+     * @param req
+     * @return true if no errors, false otherwise
+     * @throws IOException
+     */
+    private boolean validateJson(HttpServletRequest req) throws IOException {
+        ResponseMsg responseMsg = new ResponseMsg();
+        BufferedReader jsonData = req.getReader();
+
+       try {
+
+           StringBuilder sb = new StringBuilder();
+           String line;
+           while( (line = jsonData.readLine()) != null) {
+               sb.append(line);
+           }
+
+           JsonNode data = JsonLoader.fromString(String.valueOf(sb));
+           // TODO: import schema from swagger?
+           String jsonSchema = null;
+           JsonNode schema = JsonLoader.fromString(jsonSchema);
+
+           JsonSchemaFactory factory = JsonSchemaFactory.byDefault();
+           JsonValidator validator = factory.getValidator();
+
+           ProcessingReport report = validator.validate(schema, data);
+           //System.out.println(report);
+
+           if (!report.toString().contains("success")) {
+               responseMsg.setMessage("There was a problem");
+               return false;
+           }
+       } catch (IOException | ProcessingException e) {
+           e.printStackTrace();
+           responseMsg.setMessage("Failed to validate json data");
+           System.out.println(responseMsg);
+           return false;
+       }
+        return true;
     }
 
     /**

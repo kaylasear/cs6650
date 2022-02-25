@@ -57,6 +57,13 @@ public class Client {
     private int peakRequests = 0;
     private Logger LOGGER = Logger.getLogger(Client.class.getName());
 
+    HttpRequestRetryHandler requestRetryHandler = new HttpRequestRetryHandler() {
+        @Override
+        public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
+            return executionCount < 5;
+        }
+    };
+
 
     public static void main(String[] args) throws InterruptedException, IOException {
         final Client rmw = new Client();
@@ -162,20 +169,7 @@ public class Client {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
-                        @Override
-                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 5) {
-                                LOGGER.warning("Maximum tries reached for client http pool ");
-                                return false;
-                            }
-                            if (e instanceof NoHttpResponseException) {
-                                LOGGER.warning("No response from server on " + i + " call");
-                                return true;
-                            }
-                            return false;
-                        }
-                    }).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
 //                    CloseableHttpClient httpclient = HttpClients.createDefault();
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
@@ -230,20 +224,7 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
-                        @Override
-                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 5) {
-                                LOGGER.warning("Maximum tries reached for client http pool ");
-                                return false;
-                            }
-                            if (e instanceof NoHttpResponseException) {
-                                LOGGER.warning("No response from server on " + i + " call");
-                                return true;
-                            }
-                            return false;
-                        }
-                    }).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
                     // wait for the start up phase to signal us
                     startPeak.await();
                     System.out.println("starting peak");
@@ -301,20 +282,7 @@ public class Client {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
-                        @Override
-                        public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 5) {
-                                LOGGER.warning("Maximum tries reached for client http pool ");
-                                return false;
-                            }
-                            if (e instanceof NoHttpResponseException) {
-                                LOGGER.warning("No response from server on " + i + " call");
-                                return true;
-                            }
-                            return false;
-                        }
-                    }).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
                     // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
