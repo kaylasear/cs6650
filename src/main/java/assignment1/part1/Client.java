@@ -49,7 +49,7 @@ public class Client {
     private static String SERVERADDRESS = null;
 
     private int totalSuccess;
-    private int totalFailed = 0;
+    private int expectedRequests;
 
     private final CountDownLatch startPeak = new CountDownLatch(1);
     private final CountDownLatch startCool = new CountDownLatch(1);
@@ -59,8 +59,6 @@ public class Client {
     private CountDownLatch endCool;
     private int peakRequests = 0;
     private Logger LOGGER = Logger.getLogger(Client.class.getName());
-    private int expectedRequests;
-
 
 
     public static void main(String[] args) throws InterruptedException, IOException {
@@ -74,10 +72,10 @@ public class Client {
         rmw.endCool = new CountDownLatch((int) Math.round(NUMTHREADS * 0.10));
 
         long start = System.currentTimeMillis();
-
         rmw.executeStartupPhase();
         rmw.executePeakPhase();
         rmw.executeCooldownPhase();
+
 
         rmw.endSignal.await();
         rmw.endPeak.await();
@@ -110,13 +108,6 @@ public class Client {
         return peakRequests;
     }
 
-    private synchronized void incFail() {
-        totalFailed++;
-    }
-
-    private int getFail() {
-        return totalFailed;
-    }
 
     private static void validateArguments(String[] args) {
         Integer threads = Integer.parseInt(args[0]);
@@ -147,18 +138,17 @@ public class Client {
         int startSkierId = 1;
         int start = 1;
         int end = 90;
-        int startupThreads = NUMTHREADS / 4;
+        int startupThreads = NUMTHREADS/4;
 
         if (startupThreads == 0) {
             startupThreads = 1;
         }
-        int range = Math.round(NUMSKIERS / startupThreads);
-        int maxCalls = (int) ((NUMRUNS * START_POST_VARIABLE) * (range));
+        double range = ((double)NUMSKIERS/(double)startupThreads);
+        double maxCalls = ((NUMRUNS * START_POST_VARIABLE) * (range));
         int multiplier = 1;
-        expectedRequests = expectedRequests + (maxCalls*startupThreads);
+        expectedRequests += (maxCalls*startupThreads);
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        //increase max total connections to num threads
         cm.setMaxTotal(startupThreads);
 
         // set max connections per route to num threads
@@ -167,7 +157,7 @@ public class Client {
 
         for (int i = 0; i < startupThreads; i++) {
 
-            int endSkierId = range * multiplier;
+            int endSkierId = (int)range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
 
             int finalStartSkierId = startSkierId;
@@ -178,7 +168,7 @@ public class Client {
                     CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
                         @Override
                         public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 3) {
+                            if (i > 5) {
                                 LOGGER.warning("Maximum tries reached for client http pool ");
                                 return false;
                             }
@@ -201,6 +191,7 @@ public class Client {
                         }
                         counter.getAndIncrement();
                     }
+
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 } finally {
@@ -220,21 +211,22 @@ public class Client {
         int startSkierId = 1;
         int start = 91;
         int end = 360;
-        int range = (NUMSKIERS / NUMTHREADS);
-        int maxCalls = (int) ((NUMRUNS * PEAK_POST_VARIABLE) * (range));
+        double range = ((double)NUMSKIERS/(double)NUMTHREADS);
+        double maxCalls = ((NUMRUNS * PEAK_POST_VARIABLE) * (range));
         int multiplier = 1;
-        expectedRequests = expectedRequests + (maxCalls*NUMTHREADS);
+        expectedRequests += ((maxCalls*NUMTHREADS));
+
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         //increase max total connections to num threads
         cm.setMaxTotal(NUMTHREADS);
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute(NUMTHREADS);
+       cm.setDefaultMaxPerRoute(NUMTHREADS);
 
         for (int i = 0; i < NUMTHREADS; i++) {
 
-            int endSkierId = range * multiplier;
+            int endSkierId = (int)range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
             int finalStartSkierId = startSkierId;
 
@@ -244,7 +236,7 @@ public class Client {
                     CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
                         @Override
                         public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 3) {
+                            if (i > 5) {
                                 LOGGER.warning("Maximum tries reached for client http pool ");
                                 return false;
                             }
@@ -270,6 +262,7 @@ public class Client {
                         }
                         counter.getAndIncrement();
                     }
+
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
@@ -290,18 +283,17 @@ public class Client {
         int start = 361;
         int end = 420;
         int range = (int) (NUMSKIERS / (NUMTHREADS * 0.10));
-        int maxCalls = (int) ((NUMRUNS * COOL_POST_VARIABLE));
+        double maxCalls = ((NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
-        expectedRequests = (int) (expectedRequests + (maxCalls*Math.round(NUMTHREADS*0.10)));
-
+        expectedRequests += (maxCalls*Math.round(NUMTHREADS*0.10));
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
 
         //increase max total connections to num threads
-        cm.setMaxTotal((int) (NUMTHREADS * 0.10));
+        cm.setMaxTotal((int)(NUMTHREADS*0.10));
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute((int) (NUMTHREADS * 0.10));
+        cm.setDefaultMaxPerRoute(((int)(NUMTHREADS*0.10)));
 
 
         for (int i = 0; i < Math.round(NUMTHREADS * 0.10); i++) {
@@ -315,7 +307,7 @@ public class Client {
                     CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(new HttpRequestRetryHandler() {
                         @Override
                         public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
-                            if (i > 3) {
+                            if (i > 5) {
                                 LOGGER.warning("Maximum tries reached for client http pool ");
                                 return false;
                             }
@@ -330,10 +322,11 @@ public class Client {
                     startCool.await();
                     while (counter.get() <= maxCalls) {
 
-                        executePost(null, finalStartSkierId, endSkierId, start, end);
+                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
                         counter.getAndIncrement();
 
                     }
+
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
@@ -346,7 +339,6 @@ public class Client {
             startSkierId = endSkierId + 1;
 
         }
-
     }
 
 
@@ -385,19 +377,10 @@ public class Client {
             int status = response.getStatusLine().getStatusCode();
 
             HttpEntity entity = response.getEntity();
-            boolean isFailed = false;
 
-            // resend request if 4XX or 5XX
-            if (MINERRORCODE <= status) {
-                isFailed = resendRequest(client, method);
-            }
-            if (isFailed) {
-                incFail();
-            } else {
-                inc();
-            }
             // print response body
             if (entity != null) {
+                inc();
                 // return it as a String
 //                String result = EntityUtils.toString(entity);
 //                System.out.println(result);
@@ -405,12 +388,10 @@ public class Client {
             EntityUtils.consume(entity);
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            response.close();
+            method.releaseConnection();
         }
-
-//        } finally {
-//            response.close();
-//            method.releaseConnection();
-//        }
     }
 
     /**
@@ -424,28 +405,6 @@ public class Client {
         return newUrl;
     }
 
-    /**
-     * Resend the request up to 5 times if status code 4XX - 5XX
-     * @param httpClient
-     * @param request
-     * @return true if OK, false otherwise
-     * @throws IOException
-     * @throws InterruptedException
-     */
-    private boolean resendRequest(CloseableHttpClient httpClient, HttpPost request) throws IOException, InterruptedException {
-        int count = 5;
-        int status;
-
-        for (int i = 0; i <= count; i ++) {
-            CloseableHttpResponse response = httpClient.execute(request);
-            status = response.getStatusLine().getStatusCode();
-
-            if (status < MINERRORCODE) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /**
      * Helper method to generate random value
