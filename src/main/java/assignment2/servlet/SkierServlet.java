@@ -1,5 +1,6 @@
 package assignment2.servlet;
 
+import assignment2.Client;
 import assignment2.model.LiftRide;
 import assignment2.model.ResponseMsg;
 import assignment2.model.SkierVertical;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Logger;
 
 
 public class SkierServlet extends HttpServlet {
@@ -41,27 +43,134 @@ public class SkierServlet extends HttpServlet {
     private Channel channel;
 //    ConnectionFactory factory = new ConnectionFactory();
     private GenericObjectPool<Channel> pool;
+    private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
 
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
+
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
+
+        factory.setUsername("admin");
+        factory.setPassword("pass");
+
+        factory.setHost("ec2-34-222-76-177.us-west-2.compute.amazonaws.com");
         factory.setPort(5672);
+
         pool = new GenericObjectPool<Channel>((PooledObjectFactory<Channel>) factory);
+//        pool.setMaxTotal(128);
 
         try {
             connection = factory.newConnection();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-        }
-        try {
             channel = connection.createChannel();
             channel.queueDeclare(QUEUE_NAME, false, false, false, null);
-        } catch (IOException e) {
+        } catch (IOException | TimeoutException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+        String urlPath = req.getPathInfo();
+
+        // check we have a URL!
+        if (urlPath == null || urlPath.isEmpty()) {
+            res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        String[] urlParts = urlPath.split("/");
+        // and now validate url path & JSON payload and return the response status code
+        if (!isUrlValid(urlParts)) {
+            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        } else {
+            res.setStatus(HttpServletResponse.SC_OK);
+            // do any sophisticated processing with urlParts which contains all the url params
+            // TODO: format incoming data and send it as a payload to queue
+            LiftRide liftRide = processRequest(req, res, urlParts);
+            try {
+                sendMessage(liftRide.toString());
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void sendMessage(String message) throws IOException, InterruptedException {
+        try {
+            Channel channel = pool.borrowObject();
+            channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
+            LOGGER.info(" [x] Sent '" + message + "'");
+            pool.returnObject(channel);
+        } catch (Exception e) {
+            LOGGER.info("Failed to send message to queue");
+        }
+
+    }
+
+    public void close() throws IOException {
+        connection.close();
+    }
+
+//    /**
+//     * Send Json object to queue
+//     * @param message - lift ride object
+//     * @return
+//     */
+//    public boolean sendMessageToQueue(LiftRide message) throws IOException {
+//        ResponseMsg responseMsg = new ResponseMsg();
+//
+//        try {
+//            Channel channel = pool.borrowObject();
+//            channel.basicPublish(message.toString(), QUEUE_NAME, null, message.toString().getBytes(StandardCharsets.UTF_8));
+//            pool.returnObject(channel);
+//            responseMsg.setMessage("Successfully sent message to RabbitMQ");
+//            System.out.println(responseMsg);
+//            return true;
+//        } catch (Exception e) {
+//            responseMsg.setMessage("Failed to send message to RabbitMQ");
+//            System.out.println(responseMsg);
+//            return false;
+//        }
+//    }
+
+    /**
+     * Process JSON request body. Convert JSON object ot Java object
+     * @param request
+     * @param response
+     * @param urlParts
+     * @throws ServletException
+     * @throws IOException
+     */
+    private LiftRide processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
+            throws ServletException, IOException {
+        response.setContentType("application/json");
+        Gson gson = new Gson();
+        ResponseMsg responseMsg = new ResponseMsg();
+        PrintWriter out = response.getWriter();
+
+        BufferedReader skier = request.getReader();
+
+        try {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while( (line = skier.readLine()) != null) {
+                sb.append(line);
+            }
+
+            LiftRide liftRide = gson.fromJson(sb.toString(), LiftRide.class);
+
+            response.setStatus(HttpServletResponse.SC_CREATED);
+            response.setCharacterEncoding("UTF-8");
+//            out.println(liftRide.toString());
+//            responseMsg.setMessage("Write not successful");
+//            out.println(responseMsg);
+//            out.flush();
+            return liftRide;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.getWriter().write(e.getMessage());
+        }
+        return null;
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
@@ -167,109 +276,5 @@ public class SkierServlet extends HttpServlet {
         return false;
     }
 
-    @Override
-    public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
-        String urlPath = req.getPathInfo();
-
-        // check we have a URL!
-        if (urlPath == null || urlPath.isEmpty()) {
-            res.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
-        }
-
-        String[] urlParts = urlPath.split("/");
-        // and now validate url path & JSON payload and return the response status code
-        if (!isUrlValid(urlParts)) {
-            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        } else {
-            res.setStatus(HttpServletResponse.SC_OK);
-            // do any sophisticated processing with urlParts which contains all the url params
-            // TODO: format incoming data and send it as a payload to queue
-            LiftRide liftRide = processRequest(req, res, urlParts);
-//            try {
-//                sendMessage(liftRide.toString());
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-        }
-    }
-
-    public void sendMessage(String message) throws IOException, InterruptedException {
-        try {
-            Channel channel = pool.borrowObject();
-            channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
-            System.out.println(" [x] Sent '" + message + "'");
-            pool.returnObject(channel);
-        } catch (Exception e) {
-            System.out.println("Failed to send message to queue");
-        }
-
-    }
-
-    public void close() throws IOException {
-        connection.close();
-    }
-
-//    /**
-//     * Send Json object to queue
-//     * @param message - lift ride object
-//     * @return
-//     */
-//    public boolean sendMessageToQueue(LiftRide message) throws IOException {
-//        ResponseMsg responseMsg = new ResponseMsg();
-//
-//        try {
-//            Channel channel = pool.borrowObject();
-//            channel.basicPublish(message.toString(), QUEUE_NAME, null, message.toString().getBytes(StandardCharsets.UTF_8));
-//            pool.returnObject(channel);
-//            responseMsg.setMessage("Successfully sent message to RabbitMQ");
-//            System.out.println(responseMsg);
-//            return true;
-//        } catch (Exception e) {
-//            responseMsg.setMessage("Failed to send message to RabbitMQ");
-//            System.out.println(responseMsg);
-//            return false;
-//        }
-//    }
-
-    /**
-     * Process JSON request body. Convert JSON object ot Java object
-     * @param request
-     * @param response
-     * @param urlParts
-     * @throws ServletException
-     * @throws IOException
-     */
-    private LiftRide processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
-            throws ServletException, IOException {
-        response.setContentType("application/json");
-        Gson gson = new Gson();
-        ResponseMsg responseMsg = new ResponseMsg();
-        PrintWriter out = response.getWriter();
-
-        BufferedReader skier = request.getReader();
-
-        try {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while( (line = skier.readLine()) != null) {
-                sb.append(line);
-            }
-
-            LiftRide liftRide = gson.fromJson(sb.toString(), LiftRide.class);
-
-            response.setStatus(HttpServletResponse.SC_CREATED);
-            response.setCharacterEncoding("UTF-8");
-//            out.println(liftRide.toString());
-//            responseMsg.setMessage("Write not successful");
-//            out.println(responseMsg);
-//            out.flush();
-            return liftRide;
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.getWriter().write(e.getMessage());
-        }
-        return null;
-    }
 
 }
