@@ -41,12 +41,12 @@ public class SkierServlet extends HttpServlet {
     private final static String QUEUE_NAME = "queue";
     private Connection connection;
     private Channel channel;
-//    ConnectionFactory factory = new ConnectionFactory();
+
     private GenericObjectPool<Channel> pool;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
 
-    public void init(ServletConfig config) throws ServletException {
-        super.init(config);
+    public void init() throws ServletException {
+       // super.init(config);
 
         ConnectionFactory factory = new ConnectionFactory();
 
