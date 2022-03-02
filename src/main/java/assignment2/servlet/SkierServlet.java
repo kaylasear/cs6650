@@ -1,19 +1,17 @@
 package assignment2.servlet;
 
-import assignment1.part1.model.LiftRide;
-import assignment1.part1.model.ResponseMsg;
-import assignment1.part1.model.SkierVertical;
-import assignment1.part1.model.SkierVerticalResorts;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
-import com.github.fge.jsonschema.core.report.ProcessingReport;
+import assignment2.model.LiftRide;
+import assignment2.model.ResponseMsg;
+import assignment2.model.SkierVertical;
+import assignment2.model.SkierVerticalResorts;
 import com.google.gson.Gson;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.github.fge.jackson.JsonLoader;
-import com.github.fge.jsonschema.main.JsonSchemaFactory;
-import com.github.fge.jsonschema.main.JsonValidator;
+import com.rabbitmq.client.*;
+import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.impl.GenericObjectPool;
 
 
+import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -21,10 +19,16 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeoutException;
 
 
 public class SkierServlet extends HttpServlet {
+
     private final static int seasonParam = 2;
     private final static int dayParam = 4;
     private final static int skierParam = 6;
@@ -32,8 +36,32 @@ public class SkierServlet extends HttpServlet {
     private final static int urlPathVerticalLength = 3;
 
     private Gson gson = new Gson();
+    private final static String QUEUE_NAME = "queue";
+    private Connection connection;
+    private Channel channel;
+//    ConnectionFactory factory = new ConnectionFactory();
+    private GenericObjectPool<Channel> pool;
 
-    public SkierServlet() {
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+        ConnectionFactory factory = new ConnectionFactory();
+        factory.setHost("localhost");
+        factory.setPort(5672);
+        pool = new GenericObjectPool<Channel>((PooledObjectFactory<Channel>) factory);
+
+        try {
+            connection = factory.newConnection();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
+            e.printStackTrace();
+        }
+        try {
+            channel = connection.createChannel();
+            channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
@@ -151,58 +179,58 @@ public class SkierServlet extends HttpServlet {
 
         String[] urlParts = urlPath.split("/");
         // and now validate url path & JSON payload and return the response status code
-        if (!isUrlValid(urlParts) || !validateJson(req)) {
+        if (!isUrlValid(urlParts)) {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         } else {
             res.setStatus(HttpServletResponse.SC_OK);
             // do any sophisticated processing with urlParts which contains all the url params
             // TODO: format incoming data and send it as a payload to queue
-            processRequest(req, res, urlParts);
-
+            LiftRide liftRide = processRequest(req, res, urlParts);
+//            try {
+//                sendMessage(liftRide.toString());
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
         }
     }
 
-    /**
-     * Validate the JSON data from request body according to JSON schema
-     * @param req
-     * @return true if no errors, false otherwise
-     * @throws IOException
-     */
-    private boolean validateJson(HttpServletRequest req) throws IOException {
-        ResponseMsg responseMsg = new ResponseMsg();
-        BufferedReader jsonData = req.getReader();
+    public void sendMessage(String message) throws IOException, InterruptedException {
+        try {
+            Channel channel = pool.borrowObject();
+            channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
+            System.out.println(" [x] Sent '" + message + "'");
+            pool.returnObject(channel);
+        } catch (Exception e) {
+            System.out.println("Failed to send message to queue");
+        }
 
-       try {
-
-           StringBuilder sb = new StringBuilder();
-           String line;
-           while( (line = jsonData.readLine()) != null) {
-               sb.append(line);
-           }
-
-           JsonNode data = JsonLoader.fromString(String.valueOf(sb));
-           // TODO: import schema from swagger?
-           String jsonSchema = null;
-           JsonNode schema = JsonLoader.fromString(jsonSchema);
-
-           JsonSchemaFactory factory = JsonSchemaFactory.byDefault();
-           JsonValidator validator = factory.getValidator();
-
-           ProcessingReport report = validator.validate(schema, data);
-           //System.out.println(report);
-
-           if (!report.toString().contains("success")) {
-               responseMsg.setMessage("There was a problem");
-               return false;
-           }
-       } catch (IOException | ProcessingException e) {
-           e.printStackTrace();
-           responseMsg.setMessage("Failed to validate json data");
-           System.out.println(responseMsg);
-           return false;
-       }
-        return true;
     }
+
+    public void close() throws IOException {
+        connection.close();
+    }
+
+//    /**
+//     * Send Json object to queue
+//     * @param message - lift ride object
+//     * @return
+//     */
+//    public boolean sendMessageToQueue(LiftRide message) throws IOException {
+//        ResponseMsg responseMsg = new ResponseMsg();
+//
+//        try {
+//            Channel channel = pool.borrowObject();
+//            channel.basicPublish(message.toString(), QUEUE_NAME, null, message.toString().getBytes(StandardCharsets.UTF_8));
+//            pool.returnObject(channel);
+//            responseMsg.setMessage("Successfully sent message to RabbitMQ");
+//            System.out.println(responseMsg);
+//            return true;
+//        } catch (Exception e) {
+//            responseMsg.setMessage("Failed to send message to RabbitMQ");
+//            System.out.println(responseMsg);
+//            return false;
+//        }
+//    }
 
     /**
      * Process JSON request body. Convert JSON object ot Java object
@@ -211,9 +239,8 @@ public class SkierServlet extends HttpServlet {
      * @param urlParts
      * @throws ServletException
      * @throws IOException
-     * @return
      */
-    private void processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
+    private LiftRide processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
             throws ServletException, IOException {
         response.setContentType("application/json");
         Gson gson = new Gson();
@@ -233,13 +260,16 @@ public class SkierServlet extends HttpServlet {
 
             response.setStatus(HttpServletResponse.SC_CREATED);
             response.setCharacterEncoding("UTF-8");
-            out.println(liftRide.toString());
-            responseMsg.setMessage("Write successful");
-            out.println(responseMsg);
-            out.flush();
+//            out.println(liftRide.toString());
+//            responseMsg.setMessage("Write not successful");
+//            out.println(responseMsg);
+//            out.flush();
+            return liftRide;
         } catch (Exception e) {
             e.printStackTrace();
             response.getWriter().write(e.getMessage());
         }
+        return null;
     }
+
 }

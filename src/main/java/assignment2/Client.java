@@ -1,5 +1,11 @@
 package assignment2;
 
+
+import assignment2.servlet.SkierServlet;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
 import org.apache.http.HttpEntity;
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.client.HttpRequestRetryHandler;
@@ -14,7 +20,11 @@ import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -36,8 +46,6 @@ public class Client {
     private static final double START_POST_VARIABLE = 0.2;
     private static final double PEAK_POST_VARIABLE = 0.6;
     private static final double COOL_POST_VARIABLE = 0.1;
-
-    private static final int MINERRORCODE = 299;
 
     private static int NUMTHREADS;
     private static int NUMSKIERS;
@@ -64,8 +72,7 @@ public class Client {
         }
     };
 
-
-    public static void main(String[] args) throws InterruptedException, IOException {
+    public static void main(String[] args) throws InterruptedException, IOException, TimeoutException {
         final Client rmw = new Client();
         validateArguments(args);
 
@@ -148,7 +155,7 @@ public class Client {
             startupThreads = 1;
         }
         double range = ((double)NUMSKIERS/(double)startupThreads);
-        double maxCalls = ((NUMRUNS * START_POST_VARIABLE) * (range));
+        double maxCalls = (((double)NUMRUNS * START_POST_VARIABLE) * (range));
         int multiplier = 1;
         expectedRequests += (maxCalls*startupThreads);
 
@@ -169,7 +176,7 @@ public class Client {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
 //                    CloseableHttpClient httpclient = HttpClients.createDefault();
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
@@ -187,7 +194,7 @@ public class Client {
                     e.printStackTrace();
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting start");
+                   // System.out.println("shutting start");
                     endSignal.countDown();
                 }
             };
@@ -203,7 +210,7 @@ public class Client {
         int start = 91;
         int end = 360;
         double range = ((double)NUMSKIERS/(double)NUMTHREADS);
-        double maxCalls = ((NUMRUNS * PEAK_POST_VARIABLE) * (range));
+        double maxCalls = (((double)NUMRUNS * PEAK_POST_VARIABLE) * (range));
         int multiplier = 1;
         expectedRequests += ((maxCalls*NUMTHREADS));
 
@@ -224,10 +231,10 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
                     // wait for the start up phase to signal us
                     startPeak.await();
-                    System.out.println("starting peak");
+                    //System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
@@ -235,7 +242,7 @@ public class Client {
 
                         // 20% requests done, signal the Peak threads to start
                         if (getCurrent() == Math.round(maxCalls * NUMTHREADS * 0.2)) {
-                            System.out.println("starting cool");
+                           // System.out.println("starting cool");
                             startCool.countDown();
                         }
                         counter.getAndIncrement();
@@ -244,7 +251,7 @@ public class Client {
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting peak");
+                    //System.out.println("shutting peak");
                     endPeak.countDown();
                 }
             };
@@ -261,7 +268,7 @@ public class Client {
         int start = 361;
         int end = 420;
         int range = (int) (NUMSKIERS / (NUMTHREADS * 0.10));
-        double maxCalls = ((NUMRUNS * COOL_POST_VARIABLE));
+        double maxCalls = (((double)NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
         expectedRequests += (maxCalls*Math.round(NUMTHREADS*0.10));
 
@@ -282,7 +289,7 @@ public class Client {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
                     // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
@@ -295,7 +302,7 @@ public class Client {
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                    System.out.println("shutting cool");
+                   // System.out.println("shutting cool");
                     endCool.countDown();
                 }
             };
@@ -338,6 +345,8 @@ public class Client {
         CloseableHttpResponse response = client.execute(method);
 
         try {
+            //SkierServlet servlet = new SkierServlet();
+
 
             int status = response.getStatusLine().getStatusCode();
 
@@ -347,8 +356,9 @@ public class Client {
             if (entity != null) {
                 inc();
                 // return it as a String
-//                String result = EntityUtils.toString(entity);
-//                System.out.println(result);
+                String result = EntityUtils.toString(entity);
+                //servlet.sendMessageToQueue(result);
+                //System.out.println(result);
             }
             EntityUtils.consume(entity);
         } catch (IOException e) {

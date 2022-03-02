@@ -6,7 +6,7 @@
 
     <servlet>
         <servlet-name>SkierServlet</servlet-name>
-        <servlet-class>assignment1.part1.servlet.SkierServlet</servlet-class>
+        <servlet-class>assignment2.servlet.SkierServlet</servlet-class>
     </servlet>
 
     <servlet-mapping>
