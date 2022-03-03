@@ -41,7 +41,8 @@ public class SkierServlet extends HttpServlet {
     private final static int skierParam = 6;
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
-    private static final String HOST_ADDRESS = "localhost";
+
+    private static final String HOST_ADDRESS = "18.237.68.27"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
     private static int threadNumber = 128;
 
@@ -56,19 +57,20 @@ public class SkierServlet extends HttpServlet {
     public SkierServlet() {
     }
 
+    @Override
     public void init(){
         GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
         poolConfig.setMaxTotal(1);
 
         ConnectionFactory factory = new ConnectionFactory();
 
-//        factory.setUsername("admin");
-//        factory.setPassword("pass");
+        factory.setUsername("admin");
+        factory.setPassword("pass");
 
         factory.setHost(HOST_ADDRESS);
         factory.setPort(PORT);
 
-        pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
+        //pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
 
         try {
             connection = factory.newConnection();
@@ -77,6 +79,7 @@ public class SkierServlet extends HttpServlet {
             channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
+            LOGGER.info(e.getMessage());
         }
     }
 
@@ -96,9 +99,7 @@ public class SkierServlet extends HttpServlet {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         } else {
             res.setStatus(HttpServletResponse.SC_OK);
-            // do any sophisticated processing with urlParts which contains all the url params
             // TODO: format incoming data and send it as a payload to queue
-//            LiftRide liftRide = processRequest(req, res, urlParts);
             LiftRide liftRide = processRequest(req, res, urlParts);
             try {
                 sendMessage(liftRide.toString());
@@ -108,15 +109,15 @@ public class SkierServlet extends HttpServlet {
         }
     }
 
-    public void sendMessage(String message) throws IOException, InterruptedException {
+    public void sendMessage(String message) throws InterruptedException {
         try {
             // get a channel from pool
-            Channel channel = (Channel) pool.borrowObject();
+            //Channel channel = (Channel) pool.borrowObject();
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
             LOGGER.info(" [x] Sent '" + message + "'");
 
             // return channel back to pool for reuse
-            pool.returnObject(channel);
+            //pool.returnObject(channel);
         } catch (Exception e) {
             LOGGER.info("Failed to send message to queue");
         }
