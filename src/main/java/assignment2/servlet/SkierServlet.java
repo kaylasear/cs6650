@@ -1,6 +1,8 @@
 package assignment2.servlet;
 
-import assignment2.Client;
+
+
+import assignment2.ThreadObjectFactory;
 import assignment2.model.LiftRide;
 import assignment2.model.ResponseMsg;
 import assignment2.model.SkierVertical;
@@ -8,8 +10,11 @@ import assignment2.model.SkierVerticalResorts;
 import com.google.gson.Gson;
 
 import com.rabbitmq.client.*;
-import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.ObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPool;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.Channel;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
 
 import javax.servlet.ServletConfig;
@@ -21,11 +26,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 
@@ -36,31 +41,38 @@ public class SkierServlet extends HttpServlet {
     private final static int skierParam = 6;
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
+    private static final String HOST_ADDRESS = "localhost";
+    private static final int PORT = 5672;
+    private static int threadNumber = 128;
 
     private Gson gson = new Gson();
-    private final static String QUEUE_NAME = "queue";
+    private static String QUEUE_NAME = "queue";
     private Connection connection;
     private Channel channel;
 
-    private GenericObjectPool<Channel> pool;
+    private ObjectPool pool;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
 
-    public void init() throws ServletException {
-       // super.init(config);
+    public SkierServlet() {
+    }
+
+    public void init(){
+        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+        poolConfig.setMaxTotal(1);
 
         ConnectionFactory factory = new ConnectionFactory();
 
-        factory.setUsername("admin");
-        factory.setPassword("pass");
+//        factory.setUsername("admin");
+//        factory.setPassword("pass");
 
-        factory.setHost("ec2-34-222-76-177.us-west-2.compute.amazonaws.com");
-        factory.setPort(5672);
+        factory.setHost(HOST_ADDRESS);
+        factory.setPort(PORT);
 
-        pool = new GenericObjectPool<Channel>((PooledObjectFactory<Channel>) factory);
-//        pool.setMaxTotal(128);
+        pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
 
         try {
             connection = factory.newConnection();
+
             channel = connection.createChannel();
             channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         } catch (IOException | TimeoutException e) {
@@ -86,6 +98,7 @@ public class SkierServlet extends HttpServlet {
             res.setStatus(HttpServletResponse.SC_OK);
             // do any sophisticated processing with urlParts which contains all the url params
             // TODO: format incoming data and send it as a payload to queue
+//            LiftRide liftRide = processRequest(req, res, urlParts);
             LiftRide liftRide = processRequest(req, res, urlParts);
             try {
                 sendMessage(liftRide.toString());
@@ -97,9 +110,12 @@ public class SkierServlet extends HttpServlet {
 
     public void sendMessage(String message) throws IOException, InterruptedException {
         try {
-            Channel channel = pool.borrowObject();
+            // get a channel from pool
+            Channel channel = (Channel) pool.borrowObject();
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
             LOGGER.info(" [x] Sent '" + message + "'");
+
+            // return channel back to pool for reuse
             pool.returnObject(channel);
         } catch (Exception e) {
             LOGGER.info("Failed to send message to queue");
@@ -161,10 +177,10 @@ public class SkierServlet extends HttpServlet {
 
             response.setStatus(HttpServletResponse.SC_CREATED);
             response.setCharacterEncoding("UTF-8");
-//            out.println(liftRide.toString());
-//            responseMsg.setMessage("Write not successful");
-//            out.println(responseMsg);
-//            out.flush();
+            out.println(liftRide.toString());
+            responseMsg.setMessage("Write successful");
+            out.println(responseMsg);
+            out.flush();
             return liftRide;
         } catch (Exception e) {
             e.printStackTrace();

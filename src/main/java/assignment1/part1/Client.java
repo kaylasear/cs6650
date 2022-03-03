@@ -381,9 +381,9 @@ public class Client {
             // print response body
             if (entity != null) {
                 inc();
-                // return it as a String
-//                String result = EntityUtils.toString(entity);
-//                System.out.println(result);
+//                 return it as a String
+                String result = EntityUtils.toString(entity);
+                System.out.println(result);
             }
             EntityUtils.consume(entity);
         } catch (IOException e) {

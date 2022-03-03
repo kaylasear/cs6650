@@ -176,7 +176,7 @@ public class Client {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 //                    CloseableHttpClient httpclient = HttpClients.createDefault();
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
@@ -220,7 +220,8 @@ public class Client {
         cm.setMaxTotal(NUMTHREADS);
 
         // set max connections per route to num threads
-       cm.setDefaultMaxPerRoute(NUMTHREADS);
+        cm.setDefaultMaxPerRoute(NUMTHREADS);
+
 
         for (int i = 0; i < NUMTHREADS; i++) {
 
@@ -231,7 +232,7 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
                     // wait for the start up phase to signal us
                     startPeak.await();
                     //System.out.println("starting peak");
@@ -289,7 +290,7 @@ public class Client {
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setConnectionManager(cm).setRetryHandler(requestRetryHandler).build();
+                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
                     // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
@@ -358,7 +359,7 @@ public class Client {
                 // return it as a String
                 String result = EntityUtils.toString(entity);
                 //servlet.sendMessageToQueue(result);
-                //System.out.println(result);
+                System.out.println(result);
             }
             EntityUtils.consume(entity);
         } catch (IOException e) {
