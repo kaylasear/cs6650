@@ -42,7 +42,7 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "18.237.68.27"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "35.89.30.240"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
     private static int threadNumber = 128;
 
@@ -60,7 +60,7 @@ public class SkierServlet extends HttpServlet {
     @Override
     public void init(){
         GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
-        poolConfig.setMaxTotal(1);
+        poolConfig.setMaxTotal(128);
 
         ConnectionFactory factory = new ConnectionFactory();
 
@@ -70,7 +70,7 @@ public class SkierServlet extends HttpServlet {
         factory.setHost(HOST_ADDRESS);
         factory.setPort(PORT);
 
-        //pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
+        pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
 
         try {
             connection = factory.newConnection();
@@ -112,12 +112,12 @@ public class SkierServlet extends HttpServlet {
     public void sendMessage(String message) throws InterruptedException {
         try {
             // get a channel from pool
-            //Channel channel = (Channel) pool.borrowObject();
+            Channel channel = (Channel) pool.borrowObject();
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
             LOGGER.info(" [x] Sent '" + message + "'");
 
             // return channel back to pool for reuse
-            //pool.returnObject(channel);
+            pool.returnObject(channel);
         } catch (Exception e) {
             LOGGER.info("Failed to send message to queue");
         }

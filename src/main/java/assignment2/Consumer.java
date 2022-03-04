@@ -1,24 +1,29 @@
 package assignment2;
 
+import assignment2.model.LiftRide;
+import com.google.gson.Gson;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.concurrent.*;
 
 public class Consumer {
     private final static String QUEUE_NAME = "queue";
     private final static int NUM_THREADS = 128;
+    private static Map<String, String> concurrentHashMap = null;
+
+    private static Gson gson = new Gson();
+
     private static final Logger logger = LoggerFactory.getLogger(Consumer.class);
 
     public static void main(String[] argv) throws Exception {
+        concurrentHashMap = new ConcurrentHashMap<>();
+
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
+        factory.setHost("35.89.30.240");
         factory.setUsername("admin");
         factory.setPassword("pass");
         factory.setPort(5672);
@@ -31,11 +36,25 @@ public class Consumer {
 
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
-        
+
         registerConsumer(channel, 500, threadPool);
 
-        threadPool.shutdown();
-        logger.info("Thread pool shut down.");
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                logger.info("Invoking shutdown hook...");
+                logger.info("Shutting down thread pool...");
+                threadPool.shutdown();
+                try {
+                    while(!threadPool.awaitTermination(10, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    logger.info("Interrupted while waiting for termination");
+                }
+                logger.info("Thread pool shut down.");
+                logger.info("Done with shutdown hook.");
+            }
+        });
 
 //        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
 //            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
@@ -80,7 +99,11 @@ public class Consumer {
         channel.basicConsume(QUEUE_NAME, true /* auto-ack */, consumer);
     }
 
-    private static String store(String n) {
-        return ("storing..");
+    private static synchronized void store(String message) {
+        // TODO: convert string to lift object
+        //LiftRide liftRide = gson.fromJson(message, LiftRide.class);
+
+        logger.info("storing in hashmap...");
+        concurrentHashMap.put("1", message);
     }
 }
