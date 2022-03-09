@@ -2,7 +2,6 @@ package assignment2.servlet;
 
 
 
-import assignment2.ThreadObjectFactory;
 import assignment2.model.LiftRide;
 import assignment2.model.ResponseMsg;
 import assignment2.model.SkierVertical;
@@ -10,14 +9,10 @@ import assignment2.model.SkierVerticalResorts;
 import com.google.gson.Gson;
 
 import com.rabbitmq.client.*;
-import org.apache.commons.pool2.ObjectPool;
-import org.apache.commons.pool2.impl.GenericObjectPool;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Channel;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
 
-import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -26,10 +21,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
@@ -42,25 +34,27 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "35.89.30.240"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "54.149.21.111"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
-    private static int threadNumber = 128;
+    private static final int NUM_THREADS = 64;
 
     private Gson gson = new Gson();
     private static String QUEUE_NAME = "queue";
     private Connection connection;
     private Channel channel;
 
-    private ObjectPool pool;
+    BlockingQueue<Channel> blockingQueue;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
 
     public SkierServlet() {
     }
 
+    /**
+     * Set up connection to RabbitMQ
+     */
     @Override
     public void init(){
-        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
-        poolConfig.setMaxTotal(128);
+        blockingQueue = new LinkedBlockingQueue<>(NUM_THREADS);
 
         ConnectionFactory factory = new ConnectionFactory();
 
@@ -70,19 +64,29 @@ public class SkierServlet extends HttpServlet {
         factory.setHost(HOST_ADDRESS);
         factory.setPort(PORT);
 
-        pool = new GenericObjectPool<Channel>(new ThreadObjectFactory(), poolConfig);
-
         try {
             connection = factory.newConnection();
 
-            channel = connection.createChannel();
-            channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+            // add channels to blocking queue
+            for (int i = 0; i < NUM_THREADS; i++) {
+                channel = connection.createChannel();
+                channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+                blockingQueue.add(channel);
+            }
+
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
             LOGGER.info(e.getMessage());
         }
     }
 
+    /**
+     * POST method - validate request and URL, create JSON message, and send message to queue
+     * @param req
+     * @param res
+     * @throws ServletException
+     * @throws IOException
+     */
     @Override
     public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         String urlPath = req.getPathInfo();
@@ -99,9 +103,9 @@ public class SkierServlet extends HttpServlet {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         } else {
             res.setStatus(HttpServletResponse.SC_OK);
-            // TODO: format incoming data and send it as a payload to queue
             LiftRide liftRide = processRequest(req, res, urlParts);
             try {
+                // send message to queue
                 sendMessage(liftRide.toString());
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -109,15 +113,20 @@ public class SkierServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Send lift message to RabbitMQ
+     * @param message
+     * @throws InterruptedException
+     */
     public void sendMessage(String message) throws InterruptedException {
         try {
             // get a channel from pool
-            Channel channel = (Channel) pool.borrowObject();
+            Channel channel = blockingQueue.poll(60, TimeUnit.MILLISECONDS);
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
             LOGGER.info(" [x] Sent '" + message + "'");
 
             // return channel back to pool for reuse
-            pool.returnObject(channel);
+            blockingQueue.add(channel);
         } catch (Exception e) {
             LOGGER.info("Failed to send message to queue");
         }
@@ -128,27 +137,6 @@ public class SkierServlet extends HttpServlet {
         connection.close();
     }
 
-//    /**
-//     * Send Json object to queue
-//     * @param message - lift ride object
-//     * @return
-//     */
-//    public boolean sendMessageToQueue(LiftRide message) throws IOException {
-//        ResponseMsg responseMsg = new ResponseMsg();
-//
-//        try {
-//            Channel channel = pool.borrowObject();
-//            channel.basicPublish(message.toString(), QUEUE_NAME, null, message.toString().getBytes(StandardCharsets.UTF_8));
-//            pool.returnObject(channel);
-//            responseMsg.setMessage("Successfully sent message to RabbitMQ");
-//            System.out.println(responseMsg);
-//            return true;
-//        } catch (Exception e) {
-//            responseMsg.setMessage("Failed to send message to RabbitMQ");
-//            System.out.println(responseMsg);
-//            return false;
-//        }
-//    }
 
     /**
      * Process JSON request body. Convert JSON object ot Java object

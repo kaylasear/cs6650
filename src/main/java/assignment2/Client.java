@@ -80,7 +80,7 @@ public class Client {
 
         rmw.endSignal = new CountDownLatch((NUMTHREADS/4));
         rmw.endPeak = new CountDownLatch(NUMTHREADS);
-        rmw.endCool = new CountDownLatch((int) Math.round(NUMTHREADS * 0.10));
+        rmw.endCool = new CountDownLatch((int)Math.round(NUMTHREADS * 0.10));
 
         long start = System.currentTimeMillis();
         rmw.executeStartupPhase();
@@ -94,12 +94,15 @@ public class Client {
         long finish = System.currentTimeMillis();
         long wallTime = ((finish - start) / 1000);
 
-        System.out.println("Total successful requests: " + (rmw.getSuccess()));
+
+        System.out.println("Threads: " + NUMTHREADS);
+        System.out.println("---------------------------------------");
+        System.out.println("Total successful requests: " + rmw.getSuccess());
         System.out.println("Total failed requests: " + (rmw.expectedRequests - rmw.getSuccess()));
         System.out.println("Wall Time in seconds: " + wallTime);
 
-        double throughout = (double) rmw.totalSuccess / wallTime;
-        System.out.println("Total throughput: " + throughout);
+        double throughout = (double) rmw.getSuccess() / wallTime;
+        System.out.println("Total throughput (req/sec): " + throughout);
 
     }
 
@@ -164,10 +167,10 @@ public class Client {
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute(startupThreads);
+        CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
 
         for (int i = 0; i < startupThreads; i++) {
-
             int endSkierId = (int)range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
 
@@ -176,8 +179,7 @@ public class Client {
             int finalStartupThreads = startupThreads;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
-//                    CloseableHttpClient httpclient = HttpClients.createDefault();
+
                     while (counter.get() <= maxCalls) {
                         // execute the POST requests
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
@@ -194,7 +196,7 @@ public class Client {
                     e.printStackTrace();
                 } finally {
                     // we've finished - let the main thread know
-                   // System.out.println("shutting start");
+                    System.out.println("shutting start");
                     endSignal.countDown();
                 }
             };
@@ -221,10 +223,10 @@ public class Client {
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute(NUMTHREADS);
+        CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
 
         for (int i = 0; i < NUMTHREADS; i++) {
-
             int endSkierId = (int)range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
             int finalStartSkierId = startSkierId;
@@ -232,7 +234,6 @@ public class Client {
             int finalI = i;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
                     // wait for the start up phase to signal us
                     startPeak.await();
                     //System.out.println("starting peak");
@@ -252,7 +253,7 @@ public class Client {
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                    //System.out.println("shutting peak");
+                    System.out.println("shutting peak");
                     endPeak.countDown();
                 }
             };
@@ -280,17 +281,17 @@ public class Client {
 
         // set max connections per route to num threads
         cm.setDefaultMaxPerRoute(((int)(NUMTHREADS*0.10)));
+        CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
 
         for (int i = 0; i < Math.round(NUMTHREADS * 0.10); i++) {
-
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
 
             int finalStartSkierId = startSkierId;
             Runnable thread = () -> {
                 try {
-                    CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
+
                     // wait for the peak thread to tell us to start
                     startCool.await();
                     while (counter.get() <= maxCalls) {
@@ -303,7 +304,7 @@ public class Client {
                 } catch (InterruptedException | IOException e) {
                 } finally {
                     // we've finished - let the main thread know
-                   // System.out.println("shutting cool");
+                    System.out.println("shutting cool");
                     endCool.countDown();
                 }
             };
@@ -346,9 +347,6 @@ public class Client {
         CloseableHttpResponse response = client.execute(method);
 
         try {
-            //SkierServlet servlet = new SkierServlet();
-
-
             int status = response.getStatusLine().getStatusCode();
 
             HttpEntity entity = response.getEntity();
@@ -358,8 +356,7 @@ public class Client {
                 inc();
                 // return it as a String
                 String result = EntityUtils.toString(entity);
-                //servlet.sendMessageToQueue(result);
-                System.out.println(result);
+                System.out.println(status);
             }
             EntityUtils.consume(entity);
         } catch (IOException e) {

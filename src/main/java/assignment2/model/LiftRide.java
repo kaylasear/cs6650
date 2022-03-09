@@ -44,10 +44,11 @@ public class LiftRide {
 
     @Override
     public String toString() {
-        return "LiftRide{" +
-                "time=" + time +
-                ", liftId=" + liftId +
-                ", waitTime=" + waitTime +
-                '}';
+        return new StringBuilder()
+                .append("{")
+                .append("\"time\":" + time + " ,")
+                .append("\"liftId\":" + liftId + " ,")
+                .append("\"waitTime\":" + waitTime)
+                .append("}").toString();
     }
 }
