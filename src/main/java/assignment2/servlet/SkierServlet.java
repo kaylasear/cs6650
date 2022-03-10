@@ -34,7 +34,7 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "54.149.21.111"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "52.10.36.107"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
     private static final int NUM_THREADS = 64;
 

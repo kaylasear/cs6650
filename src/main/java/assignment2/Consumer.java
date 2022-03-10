@@ -27,7 +27,7 @@ public class Consumer {
                 new LinkedBlockingQueue<Runnable>());
 
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("54.149.21.111");
+        factory.setHost("52.10.36.107");
         factory.setUsername("admin");
         factory.setPassword("pass");
 
