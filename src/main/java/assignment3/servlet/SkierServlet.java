@@ -1,10 +1,7 @@
 package assignment3.servlet;
 
 
-import assignment3.model.LiftRide;
-import assignment3.model.ResponseMsg;
-import assignment3.model.SkierVertical;
-import assignment3.model.SkierVerticalResorts;
+import assignment3.model.*;
 import com.google.gson.Gson;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -34,9 +31,9 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "52.10.36.107"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "34.210.119.151"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
-    private static final int NUM_THREADS = 64;
+    private static final int NUM_THREADS = 128;
 
     private Gson gson = new Gson();
     private static String QUEUE_NAME = "queue";
@@ -103,10 +100,11 @@ public class SkierServlet extends HttpServlet {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         } else {
             res.setStatus(HttpServletResponse.SC_OK);
-            LiftRide liftRide = processRequest(req, res, urlParts);
+
+            Skier skier = processRequest(req, res, urlParts);
             try {
                 // send message to queue
-                sendMessage(liftRide.toString());
+                sendMessage(skier.toString());
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -146,7 +144,7 @@ public class SkierServlet extends HttpServlet {
      * @throws ServletException
      * @throws IOException
      */
-    private LiftRide processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
+    private Skier processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
             throws ServletException, IOException {
         response.setContentType("application/json");
         Gson gson = new Gson();
@@ -164,13 +162,22 @@ public class SkierServlet extends HttpServlet {
 
             LiftRide liftRide = gson.fromJson(sb.toString(), LiftRide.class);
 
+            // collect variables from url
+            int resortId = Integer.parseInt(urlParts[1]);
+            String seasonId = urlParts[seasonParam+1];
+            String dayId = urlParts[dayParam+1];
+            int skierId = Integer.valueOf(urlParts[skierParam+1]);
+
+            // build skier object with liftride info
+            Skier skier1 = new Skier(resortId, seasonId, dayId, skierId, liftRide);
+
             response.setStatus(HttpServletResponse.SC_CREATED);
             response.setCharacterEncoding("UTF-8");
-            out.println(liftRide.toString());
+            out.println(skier.toString());
             responseMsg.setMessage("Write successful");
             out.println(responseMsg);
             out.flush();
-            return liftRide;
+            return skier1;
         } catch (Exception e) {
             e.printStackTrace();
             response.getWriter().write(e.getMessage());

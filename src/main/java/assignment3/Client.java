@@ -72,7 +72,7 @@ public class Client {
 
         rmw.endSignal = new CountDownLatch((NUMTHREADS/4));
         rmw.endPeak = new CountDownLatch(NUMTHREADS);
-        rmw.endCool = new CountDownLatch((int)Math.round(NUMTHREADS * 0.10));
+        rmw.endCool = new CountDownLatch((int) (NUMTHREADS * 0.10));
 
         long start = System.currentTimeMillis();
         rmw.executeStartupPhase();
@@ -276,7 +276,7 @@ public class Client {
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
 
-        for (int i = 0; i < Math.round(NUMTHREADS * 0.10); i++) {
+        for (int i = 0; i < (NUMTHREADS * 0.10); i++) {
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
 

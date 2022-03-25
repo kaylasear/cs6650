@@ -5,13 +5,17 @@ import com.google.gson.Gson;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.*;
 
-public class Consumer {
+public class ResortConsumer {
     private final static String QUEUE_NAME = "queue";
+    private final static String HOST_NAME = "52.10.36.107";
+    private final static String REDIS_HOST_NAME = "52.10.36.107";
     private final static int NUM_THREADS = 64;
     private static Map<Integer, Integer> concurrentHashMap = null;
 
@@ -27,7 +31,7 @@ public class Consumer {
                 new LinkedBlockingQueue<Runnable>());
 
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("52.10.36.107");
+        factory.setHost(HOST_NAME);
         factory.setUsername("admin");
         factory.setPassword("pass");
 
@@ -78,6 +82,7 @@ public class Consumer {
                         public void run() {
                             // store in hashmap
                             store(new String(body));
+                            // store in Redis
                             logger.info(String.format("Processed %s", new String(body)));
                         }
                     });
@@ -95,9 +100,18 @@ public class Consumer {
      * @param message - lift ride message
      */
     private static synchronized void store(String message) {
+        // connect to Redis
+        JedisPool pool = new JedisPool(REDIS_HOST_NAME , 6379);
+        // convert message to Resorts object
         LiftRide liftRide = gson.fromJson(message, LiftRide.class);
 
         //logger.info("storing in hashmap liftId: " + liftRide.getLiftId() + "waitTime: "  + liftRide.getWaitTime());
         concurrentHashMap.put(liftRide.getLiftId(), liftRide.getWaitTime());
+
+
+        try (Jedis jedis = pool.getResource()){
+            // skier id, total vertical?
+            //jedis.set("clientName", )
+        }
     }
 }
