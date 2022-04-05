@@ -31,9 +31,10 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "34.210.119.151"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "54.149.206.120"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
-    private static final int NUM_THREADS = 128;
+    private static final int NUM_THREADS = 256;
+    private static final String EXCHANGE_NAME = "logs";
 
     private Gson gson = new Gson();
     private static String QUEUE_NAME = "queue";
@@ -67,7 +68,8 @@ public class SkierServlet extends HttpServlet {
             // add channels to blocking queue
             for (int i = 0; i < NUM_THREADS; i++) {
                 channel = connection.createChannel();
-                channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+                channel.exchangeDeclare(EXCHANGE_NAME, "fanout");
+                //channel.queueDeclare(QUEUE_NAME, false, false, false, null);
                 blockingQueue.add(channel);
             }
 
@@ -119,8 +121,8 @@ public class SkierServlet extends HttpServlet {
     public void sendMessage(String message) throws InterruptedException {
         try {
             // get a channel from pool
-            Channel channel = blockingQueue.poll(60, TimeUnit.MILLISECONDS);
-            channel.basicPublish("", QUEUE_NAME, null, message.getBytes(StandardCharsets.UTF_8));
+            Channel channel = blockingQueue.poll(0, TimeUnit.MILLISECONDS);
+            channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes(StandardCharsets.UTF_8));
             LOGGER.info(" [x] Sent '" + message + "'");
 
             // return channel back to pool for reuse
@@ -145,7 +147,7 @@ public class SkierServlet extends HttpServlet {
      * @throws IOException
      */
     private Skier processRequest(HttpServletRequest request, HttpServletResponse response, String[] urlParts)
-            throws ServletException, IOException {
+            throws IOException {
         response.setContentType("application/json");
         Gson gson = new Gson();
         ResponseMsg responseMsg = new ResponseMsg();
@@ -201,7 +203,6 @@ public class SkierServlet extends HttpServlet {
         String[] urlParts = urlPath.split("/");
         // and now validate url path and return the response status code
         // (and maybe also some value if input is valid)
-
 
         if (!isUrlValid(urlParts)) {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);

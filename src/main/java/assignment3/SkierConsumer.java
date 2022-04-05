@@ -1,6 +1,5 @@
 package assignment3;
 
-import assignment3.model.LiftRide;
 import assignment3.model.Skier;
 import com.google.gson.Gson;
 import com.rabbitmq.client.*;
@@ -8,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.exceptions.JedisException;
 
 import java.io.IOException;
@@ -18,9 +16,11 @@ import java.util.concurrent.*;
 
 public class SkierConsumer {
     private final static String QUEUE_NAME = "queue";
-    private final static String HOST_NAME = "34.210.119.151";
-    private final static String REDIS_HOST_NAME = "54.245.40.151";
-    private final static int NUM_THREADS = 128;
+    private static final String EXCHANGE_NAME = "logs";
+
+    private final static String RABBITMQ_HOST_NAME = "54.149.206.120";
+    private final static String REDIS_HOST_NAME = "34.211.157.153";
+    private final static int NUM_THREADS = 256;
     private static Map<Integer, Integer> concurrentHashMap = null;
 
     private static JedisPool pool;
@@ -35,12 +35,12 @@ public class SkierConsumer {
     public static void main(String[] argv) throws Exception {
         concurrentHashMap = new ConcurrentHashMap<>();
 
-        final ExecutorService threadPool =  new ThreadPoolExecutor(NUM_THREADS, NUM_THREADS,
+        final ExecutorService threadPool =  new ThreadPoolExecutor(NUM_THREADS/2, NUM_THREADS/2,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<Runnable>());
 
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(HOST_NAME);
+        factory.setHost(RABBITMQ_HOST_NAME);
         factory.setUsername("admin");
         factory.setPassword("pass");
 
@@ -67,24 +67,26 @@ public class SkierConsumer {
                 logger.info("Thread pool shut down.");
             }
         });
-        // close jedis connection pool
-        //pool.close();
 
         }
 
+    /**
+     * Connect and configure to the database. Thread-safe configurations from
+     * https://www.baeldung.com/jedis-java-redis-client-library
+     */
     private static void connectToDatabase() {
         pool = new JedisPool(REDIS_HOST_NAME , 6379);
 
         pool.setMaxTotal(NUM_THREADS);
-//        pool.setBlockWhenExhausted(true);
-//        pool.setMaxIdle(NUM_THREADS);
-//        pool.setMinIdle(16);
-//        pool.setMinEvictableIdle(Duration.ofMillis(60000));
-//        pool.setTimeBetweenEvictionRuns(Duration.ofMillis(30000));
-//        pool.setNumTestsPerEvictionRun(3);
-//        pool.setTestOnBorrow(true);
-//        pool.setTestOnReturn(true);
-//        pool.setTestWhileIdle(true);
+        pool.setBlockWhenExhausted(true);
+        pool.setMaxIdle(NUM_THREADS);
+        pool.setMinIdle(16);
+        pool.setMinEvictableIdle(Duration.ofMillis(60000));
+        pool.setTimeBetweenEvictionRuns(Duration.ofMillis(30000));
+        pool.setNumTestsPerEvictionRun(3);
+        pool.setTestOnBorrow(true);
+        pool.setTestOnReturn(true);
+        pool.setTestWhileIdle(true);
 
         System.out.println("Connection successful");
     }
@@ -96,9 +98,9 @@ public class SkierConsumer {
      * @throws IOException
      */
     private static void registerConsumer(Channel channel, ExecutorService threadPool) throws IOException {
-        channel.exchangeDeclare(QUEUE_NAME, "fanout");
+        channel.exchangeDeclare(EXCHANGE_NAME, "fanout");
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
-        channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
+        channel.queueBind(QUEUE_NAME, EXCHANGE_NAME, "");
 
         DefaultConsumer consumer = new DefaultConsumer(channel) {
             @Override
@@ -121,38 +123,41 @@ public class SkierConsumer {
                 }
             }
         };
-
         channel.basicConsume(QUEUE_NAME, true /* auto-ack */, consumer);
     }
 
     /**
-     * Store in hashmap. Method is synchronized to avoid collisions
+     * Store in database. Method is synchronized to avoid collisions
      * @param skierMessage - skier message
      */
     private static synchronized void store(String skierMessage) {
-
         // convert message to Skier object
         Skier skier = gson.fromJson(skierMessage, Skier.class);
 
-        // construct map {dayId: 1, seasonId: 2019, vertical: 20, lift: lift.toString()}
-        Map<String, String> map = new HashMap<>();
-        map.put("dayId", skier.getDayId());
-        map.put("seasonId", skier.getSeasonId());
-        map.put("vertical", String.valueOf(skier.getVertical()));
-        map.put("lift", skier.getLiftRide().toString());
-
         // get a jedis connection from pool
         Jedis jedis = pool.getResource();
-        jedis.connect();
-//        logger.info("Server is running :" + jedis.ping());
+        String skierId = String.valueOf(skier.getSkierId());
+        //jedis.connect();
         try {
-            // {key: skierId, value: map{dayId, seasonId, vertical, lift}}
 
-            jedis.hmset(String.valueOf(skier.getSkierId()), map);
+            // if key exists, append the value
+            if (jedis.exists(skierId)) {
+                // insert lift info into map {key: "skier-143 lifts", field: "day-10" value: "liftRide{time..waittime..}"}
+                String oldValue = jedis.hget("skier-"+skierId+" lifts", "day-"+skier.getDayId());
+                jedis.hset("skier-"+skierId+"-lifts", "day-"+skier.getDayId(),oldValue+skier.getLiftRide().toString());
+            } else {
+                // create list and insert skier info
+                jedis.hset("skier-"+skierId+"-lifts", "day-"+skier.getDayId(), skier.getLiftRide().toString());
+            }
+            // insert day into set {key: "skier-143 days", value: "1", "365"...}
+            jedis.sadd("skier-"+skierId+"-days", skier.getDayId());
+
+            // insert vertical for each day into map {key: "143", field: "day-10" value: 210}
+            jedis.hincrBy(skierId, "day-"+skier.getDayId(), skier.getVertical());
             //logger.info("Successfully added to database");
 
         } catch (JedisException e) {
-            if (null != jedis) {
+            if (jedis != null) {
                 // if error, return it back to pool
                 pool.returnBrokenResource(jedis);
                 jedis = null;

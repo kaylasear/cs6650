@@ -2,6 +2,7 @@ package assignment3;
 
 
 
+import org.apache.commons.lang3.concurrent.EventCountCircuitBreaker;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -16,6 +17,7 @@ import org.apache.http.util.EntityUtils;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -26,9 +28,7 @@ public class Client {
     private static String url = "http://";
     private static final String port = ":8080";
     private static final String webapp = "/assignment1";
-    private static String dayId = "5";
     private static String seasonId = "2019";
-    private static String resortId = "1";
 
     private static final int MINLIFTS = 5;
     private static final int MAXLIFTS = 60;
@@ -56,13 +56,7 @@ public class Client {
     private CountDownLatch endCool;
     private int peakRequests = 0;
     private Logger LOGGER = Logger.getLogger(Client.class.getName());
-
-    HttpRequestRetryHandler requestRetryHandler = new HttpRequestRetryHandler() {
-        @Override
-        public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
-            return executionCount < 5;
-        }
-    };
+    private EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(2500, 1, TimeUnit.SECONDS, 1000);
 
     public static void main(String[] args) throws InterruptedException, IOException, TimeoutException {
         final Client rmw = new Client();
@@ -79,13 +73,11 @@ public class Client {
         rmw.executePeakPhase();
         rmw.executeCooldownPhase();
 
-
         rmw.endSignal.await();
         rmw.endPeak.await();
         rmw.endCool.await();
         long finish = System.currentTimeMillis();
         long wallTime = ((finish - start) / 1000);
-
 
         System.out.println("Threads: " + NUMTHREADS);
         System.out.println("---------------------------------------");
@@ -95,7 +87,6 @@ public class Client {
 
         double throughout = (double) rmw.getSuccess() / wallTime;
         System.out.println("Total throughput (req/sec): " + throughout);
-
     }
 
     public synchronized void inc() {
@@ -113,7 +104,6 @@ public class Client {
     private synchronized int getCurrent() {
         return peakRequests;
     }
-
 
     private static void validateArguments(String[] args) {
         Integer threads = Integer.parseInt(args[0]);
@@ -161,7 +151,6 @@ public class Client {
         cm.setDefaultMaxPerRoute(startupThreads);
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
-
         for (int i = 0; i < startupThreads; i++) {
             int endSkierId = (int)range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
@@ -183,8 +172,7 @@ public class Client {
                         }
                         counter.getAndIncrement();
                     }
-
-                } catch (IOException | InterruptedException e) {
+                } catch (IOException | InterruptedException | PeakLoadException e) {
                     e.printStackTrace();
                 } finally {
                     // we've finished - let the main thread know
@@ -195,7 +183,6 @@ public class Client {
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
-
         }
     }
 
@@ -211,12 +198,11 @@ public class Client {
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         //increase max total connections to num threads
-        cm.setMaxTotal(NUMTHREADS);
+        cm.setMaxTotal(NUMTHREADS/2);
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute(NUMTHREADS);
+        cm.setDefaultMaxPerRoute(NUMTHREADS/2);
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
-
 
         for (int i = 0; i < NUMTHREADS; i++) {
             int endSkierId = (int)range * multiplier;
@@ -230,8 +216,9 @@ public class Client {
                     startPeak.await();
                     //System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
-                        // execute the POST requests
+                        // execute the POST request
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
+
                         incCurrent();
 
                         // 20% requests done, signal the Peak threads to start
@@ -242,7 +229,7 @@ public class Client {
                         counter.getAndIncrement();
                     }
 
-                } catch (InterruptedException | IOException e) {
+                } catch (InterruptedException | IOException | PeakLoadException e) {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting peak");
@@ -252,7 +239,6 @@ public class Client {
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
-
         }
 
     }
@@ -275,7 +261,6 @@ public class Client {
         cm.setDefaultMaxPerRoute(((int)(NUMTHREADS*0.10)));
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
-
         for (int i = 0; i < (NUMTHREADS * 0.10); i++) {
             int endSkierId = range * multiplier;
             AtomicInteger counter = new AtomicInteger(1);
@@ -290,10 +275,9 @@ public class Client {
 
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
                         counter.getAndIncrement();
-
                     }
 
-                } catch (InterruptedException | IOException e) {
+                } catch (InterruptedException | IOException | PeakLoadException e) {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting cool");
@@ -303,23 +287,24 @@ public class Client {
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
-
         }
     }
 
 
-    public void executePost(CloseableHttpClient client, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException {
+    public void executePost(CloseableHttpClient client, int startSkierId, int endSkierId, int startTime, int endTime) throws IOException, InterruptedException, PeakLoadException {
         // generate random values for skierId, liftId, time, waitTime
         int skierId = generateRandomValue(startSkierId, endSkierId);
         int liftId = generateRandomValue(0, NUMLIFTS);
         int time = generateRandomValue(startTime, endTime);
         int waitTime = generateRandomValue(0, 10);
+        int dayId = generateRandomValue(0, 360);
+        int resortId = generateRandomValue(0, 10);
 
         // create path and map variables
         String localVarPath = "/skiers/{resortId}/seasons/{seasonId}/days/{dayId}/skiers/{skierId}"
-                .replaceAll("\\{resortId\\}", resortId)
+                .replaceAll("\\{resortId\\}", String.valueOf(resortId))
                 .replaceAll("\\{seasonId\\}", seasonId)
-                .replaceAll("\\{dayId\\}", dayId)
+                .replaceAll("\\{dayId\\}", String.valueOf(dayId))
                 .replaceAll("\\{" + "skierId" + "\\}", String.valueOf(skierId));
 
         // build url
@@ -336,28 +321,41 @@ public class Client {
         // execute POST method
         HttpPost method = new HttpPost(newUrl);
         method.setEntity(new StringEntity(json));
-        CloseableHttpResponse response = client.execute(method);
 
-        try {
-            int status = response.getStatusLine().getStatusCode();
+        // check circuit breaker state
+        if (breaker.incrementAndCheckState()) {
+            CloseableHttpResponse response = client.execute(method);
 
-            HttpEntity entity = response.getEntity();
+            try {
+                int status = response.getStatusLine().getStatusCode();
 
-            // print response body
-            if (entity != null) {
-                inc();
-                // return it as a String
-                String result = EntityUtils.toString(entity);
-                System.out.println(status);
+                HttpEntity entity = response.getEntity();
+
+                // print response body
+                if (entity != null) {
+                    inc();
+                    // return it as a String
+                    String result = EntityUtils.toString(entity);
+                    System.out.println(status);
+                }
+                EntityUtils.consume(entity);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                response.close();
+                method.releaseConnection();
             }
-            EntityUtils.consume(entity);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            response.close();
-            method.releaseConnection();
+        } else { // throw error code if peak load hit
+            throw new PeakLoadException("peak load, cannot send request");
         }
     }
+
+    HttpRequestRetryHandler requestRetryHandler = new HttpRequestRetryHandler() {
+        @Override
+        public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
+            return executionCount < 5;
+        }
+    };
 
     /**
      * Helper method to build URL path

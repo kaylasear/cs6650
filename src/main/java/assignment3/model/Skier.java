@@ -63,4 +63,13 @@ public class Skier {
                 .append("\"liftRide\":" + liftRide)
                 .append("}").toString();
     }
+
+    public String toStringData() {
+        return "resortId=" + resortId +
+                ", seasonId=" + seasonId  +
+                ", dayId=" + dayId +
+                ", skierId=" + skierId +
+                ", vertical=" + vertical +
+                ", liftRide=" + liftRide ;
+    }
 }
