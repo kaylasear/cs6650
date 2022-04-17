@@ -138,10 +138,8 @@ public class ResortConsumer {
 
         // get a jedis connection from pool
         Jedis jedis = pool.getResource();
-        //jedis.connect();
-        // logger.info("Server is running :" + jedis.ping());
-        try {
 
+        try {
             // if key exists, append the value
             if (jedis.exists(skier.getDayId())) {
 
@@ -158,7 +156,6 @@ public class ResortConsumer {
             jedis.hincrBy("day-"+skier.getDayId()+"-lift-"+skier.getLiftRide().getLiftId(), "totalRides", 1);
 
             //logger.info("Successfully added to database");
-
         } catch (JedisException e) {
             if (jedis != null) {
                 // if error, return it back to pool

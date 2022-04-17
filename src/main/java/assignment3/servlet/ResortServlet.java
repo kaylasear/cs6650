@@ -87,8 +87,9 @@ public class ResortServlet extends HttpServlet {
         out.flush();
     }
 
-    /**
+    /** TODO: Struti - fetch results from Redis DB
      * Get total number of skiers at specified resort, season, day
+     * urlPath = GET/resorts/{resortID}/seasons/{seasonID}/day/{dayID}/skiers
      * @param res
      * @param req
      * @param resortId
