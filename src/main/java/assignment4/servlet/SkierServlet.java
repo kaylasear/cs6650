@@ -1,7 +1,8 @@
-package assignment3.servlet;
+package assignment4.servlet;
 
 
-import assignment3.model.*;
+
+import assignment4.model.*;
 import com.google.gson.Gson;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -231,7 +232,7 @@ public class SkierServlet extends HttpServlet {
         out.flush();
     }
 
-    /**
+    /** TODO: Struti - fetch results from Redis DB
      * Get the ski day vertical for a skier for the specified ski day
      *  urlPath = GET/skiers/{skierId}/vertical
      * @param res
@@ -253,7 +254,7 @@ public class SkierServlet extends HttpServlet {
 
     }
 
-    /**
+    /** TODO: Struti - fetch results from Redis DB
      * Get the total vertical for the skier for the specified season at specified resort. If no season,
      * return full list
      * urlPath = GET/skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}

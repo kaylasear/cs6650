@@ -1,4 +1,4 @@
-package assignment3.servlet;
+package assignment4.servlet;
 
 import assignment1.part1.model.*;
 import com.google.gson.Gson;
@@ -87,7 +87,7 @@ public class ResortServlet extends HttpServlet {
         out.flush();
     }
 
-    /**
+    /** TODO: Struti - fetch results from Redis DB
      * Get total number of skiers at specified resort, season, day
      * urlPath = GET/resorts/{resortID}/seasons/{seasonID}/day/{dayID}/skiers
      * @param res
