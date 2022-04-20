@@ -28,7 +28,9 @@ public class Client {
     private static String url = "http://";
     private static final String port = ":8080";
     private static final String webapp = "/assignment1";
-    private static String seasonId = "2019";
+    private static String seasonId = "2022";
+    private static String dayId="3";
+    private static Integer resortId = 10;
 
     private static final int MINLIFTS = 5;
     private static final int MAXLIFTS = 60;
@@ -56,7 +58,7 @@ public class Client {
     private CountDownLatch endCool;
     private int peakRequests = 0;
     private Logger LOGGER = Logger.getLogger(Client.class.getName());
-    private EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(2500, 1, TimeUnit.SECONDS, 1000);
+    private EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(2000, 1, TimeUnit.SECONDS, 1000);
 
     public static void main(String[] args) throws InterruptedException, IOException, TimeoutException {
         final Client rmw = new Client();
@@ -297,8 +299,8 @@ public class Client {
         int liftId = generateRandomValue(0, NUMLIFTS);
         int time = generateRandomValue(startTime, endTime);
         int waitTime = generateRandomValue(0, 10);
-        int dayId = generateRandomValue(0, 360);
-        int resortId = generateRandomValue(0, 10);
+        //int dayId = generateRandomValue(0, 360);
+        //int resortId = generateRandomValue(0, 10);
 
         // create path and map variables
         String localVarPath = "/skiers/{resortId}/seasons/{seasonId}/days/{dayId}/skiers/{skierId}"

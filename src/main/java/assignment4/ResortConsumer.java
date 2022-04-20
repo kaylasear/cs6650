@@ -19,8 +19,8 @@ public class ResortConsumer {
     private final static String QUEUE_NAME = "queue2";
     private static final String EXCHANGE_NAME = "logs";
 
-    private final static String RABBITMQ_HOST_NAME = "54.149.206.120";
-    private final static String REDIS_HOST_NAME = "34.211.157.153";
+    private final static String RABBITMQ_HOST_NAME = "54.149.209.131";
+    private final static String REDIS_HOST_NAME = "18.236.211.91";
     private final static int NUM_THREADS = 256;
     private static Map<Integer, Integer> concurrentHashMap = null;
 
