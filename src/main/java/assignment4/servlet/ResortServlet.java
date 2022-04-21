@@ -125,45 +125,34 @@ public class ResortServlet extends HttpServlet {
      * @param dayId
      */
     public void getTotalSkiersAtResort(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId) throws IOException {
-        ResortsList resortsList = new ResortsList();
-        ArrayList<Resort> list = resortsList.getResorts();
-
         connectToDatabase();
         Jedis jedis = pool.getResource();
         try {
             String resortIDStr = String.valueOf(resortId);
             ResponseMsg responseMsg = null;
-
-            //TODO: How to check for season?
-            //TODO: Should we check for resort ID and day ID separately?
             String key = "resort-"+resortIDStr+"-day-"+dayId;
             Set<String> skierDataSet = new HashSet<>();
-            List<String> skierDataList = new ArrayList<>();
+            Integer size = 0;
+            ResortSkier resortSkier = null;
 
             //check set/entry for resortID/dayID exists
             if(jedis.scard(key) == 1){
                     skierDataSet = jedis.smembers(key);
-                    skierDataList = new ArrayList<String>();
-                    for (String skierID : skierDataSet) {
-                        skierDataList.add(skierID);
-                    }
+                    size = skierDataSet.size();
+                    resortSkier = new ResortSkier("Mission Ridge",size);
                     //else return appropriate API message
                 } else {
                     responseMsg = new ResponseMsg("Resort ID/Day ID entry does not exist");
-                }
-//                //handle case where day ID is not there in DB
-//            }else{
-//                responseMsg = new ResponseMsg("Day ID does not exist");
-//            }
+            }
+
             PrintWriter out = res.getWriter();
             res.setCharacterEncoding("UTF-8");
-            if(skierDataList.size() != 0){
-                out.println(skierDataList);
-                out.flush();
+            if(size != 0){
+                out.println(resortSkier);
             }else{
                 out.println(responseMsg);
-                out.flush();
             }
+            out.flush();
         } catch (JedisException e) {
             if (jedis != null) {
                 // if error, return it back to pool

@@ -279,6 +279,7 @@ public class SkierServlet extends HttpServlet {
             ResponseMsg responseMsg = null;
 
             //check if the dayID entry is present for the skierID
+            //TODO: just look up for skierID and day and return that value since this is already doing the total
             Integer sumTotalVertical = 0;
             if(jedis.exists(skierIdStr)) {
                 if (jedis.hexists(skierIdStr, dayId)) {
@@ -331,7 +332,7 @@ public class SkierServlet extends HttpServlet {
         try {
             String skierId = String.valueOf(id);
             Integer seasonID = 2;
-
+            //use the hincr data structure
             //How to specify resort for this?
             //Should it connect to resort DB?
             List<String> verticalTotalsForSkierIDList = jedis.hvals(skierId);
