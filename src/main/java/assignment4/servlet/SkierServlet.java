@@ -7,6 +7,9 @@ import com.google.gson.Gson;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.exceptions.JedisException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -16,7 +19,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +50,8 @@ public class SkierServlet extends HttpServlet {
 
     BlockingQueue<Channel> blockingQueue;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
+    private final static String REDIS_HOST_NAME = "34.211.157.153";
+    private static JedisPool pool;
 
     public SkierServlet() {
     }
@@ -232,6 +240,27 @@ public class SkierServlet extends HttpServlet {
         out.flush();
     }
 
+    /**
+     * Connect and configure to the database. Thread-safe configurations from
+     * https://www.baeldung.com/jedis-java-redis-client-library
+     */
+    private static void connectToDatabase() {
+        pool = new JedisPool(REDIS_HOST_NAME , 6379);
+
+        pool.setMaxTotal(NUM_THREADS);
+        pool.setBlockWhenExhausted(true);
+        pool.setMaxIdle(NUM_THREADS);
+        pool.setMinIdle(16);
+        pool.setMinEvictableIdle(Duration.ofMillis(60000));
+        pool.setTimeBetweenEvictionRuns(Duration.ofMillis(30000));
+        pool.setNumTestsPerEvictionRun(3);
+        pool.setTestOnBorrow(true);
+        pool.setTestOnReturn(true);
+        pool.setTestWhileIdle(true);
+
+        System.out.println("Connection successful");
+    }
+
     /** TODO: Struti - fetch results from Redis DB
      * Get the ski day vertical for a skier for the specified ski day
      *  urlPath = GET/skiers/{skierId}/vertical
@@ -243,14 +272,48 @@ public class SkierServlet extends HttpServlet {
      * @param skierId
      */
     private void getSkierDayVertical(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId, Integer skierId) throws IOException {
-        SkierVerticalResorts skierVerticalResorts = new SkierVerticalResorts(seasonId, 34507); // dummy data
-        Integer totalVert = skierVerticalResorts.getTotalVert();
+        connectToDatabase();
+        Jedis jedis = pool.getResource();
+        try {
+            String skierIdStr = String.valueOf(skierId);
+            ResponseMsg responseMsg = null;
 
-        String resultString = this.gson.toJson(totalVert);
-        PrintWriter out = res.getWriter();
-        res.setCharacterEncoding("UTF-8");
-        out.println(resultString);
-        out.flush();
+            //check if the dayID entry is present for the skierID
+            Integer sumTotalVertical = 0;
+            if(jedis.exists(skierIdStr)) {
+                if (jedis.hexists(skierIdStr, dayId)) {
+                    Map<String, String> verticalTotalsByDayIDSkierID = jedis.hgetAll(skierIdStr);
+                    for (Map.Entry<String, String> entry : verticalTotalsByDayIDSkierID.entrySet()) {
+                        if (entry.getKey().equals(dayId)) {
+                            sumTotalVertical += Integer.parseInt(entry.getValue());
+                        }
+                    }
+                    //else return appropriate API message
+                } else {
+                    responseMsg = new ResponseMsg("Day Id does not exist for the skier");
+                }
+                //handle case where skierID is not there in DB
+            }else{
+                    responseMsg = new ResponseMsg("Skier ID does not exist");
+            }
+            PrintWriter out = res.getWriter();
+            res.setCharacterEncoding("UTF-8");
+            if(sumTotalVertical != 0){
+                out.println(sumTotalVertical);
+                out.flush();
+            }else{
+                out.println(responseMsg);
+                out.flush();
+            }
+        } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
+        } finally {
+            pool.returnResource(jedis);
+        }
 
     }
 
@@ -263,17 +326,37 @@ public class SkierServlet extends HttpServlet {
      * @param id
      */
     private void getSkierResortTotal(HttpServletResponse res, HttpServletRequest req, Integer id) throws IOException {
-        //dummy data
-        SkierVertical skierVertical = new SkierVertical();
-        skierVertical.addVertical("2019", 34507);
+        connectToDatabase();
+        Jedis jedis = pool.getResource();
+        try {
+            String skierId = String.valueOf(id);
+            Integer seasonID = 2;
 
-        ArrayList<SkierVerticalResorts> result = skierVertical.getResorts();
+            //How to specify resort for this?
+            //Should it connect to resort DB?
+            List<String> verticalTotalsForSkierIDList = jedis.hvals(skierId);
+            Integer sumTotal = 0;
+            for (String skierTotal : verticalTotalsForSkierIDList) {
+                sumTotal += Integer.parseInt(skierTotal);
+            }
 
-        String resultString = this.gson.toJson(result);
-        PrintWriter out = res.getWriter();
-        res.setCharacterEncoding("UTF-8");
-        out.println(resultString);
-        out.flush();
+            SkierVertical skierVerticalResponse = new SkierVertical();
+            skierVerticalResponse.addVertical(seasonID.toString(), sumTotal);
+
+            String resultString = this.gson.toJson(skierVerticalResponse);
+            PrintWriter out = res.getWriter();
+            res.setCharacterEncoding("UTF-8");
+            out.println(resultString);
+            out.flush();
+        } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
+        } finally {
+            pool.returnResource(jedis);
+        }
 
     }
 
