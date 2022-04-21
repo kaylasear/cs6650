@@ -29,7 +29,7 @@ public class Client {
     private static final String port = ":8080";
     private static final String webapp = "/assignment1";
     private static String seasonId = "2022";
-    private static String dayId="3";
+    private static String dayId="1";
     private static Integer resortId = 10;
 
     private static final int MINLIFTS = 5;
@@ -50,15 +50,9 @@ public class Client {
     private int totalSuccess;
     private int expectedRequests;
 
-    private final CountDownLatch startPeak = new CountDownLatch(1);
-    private final CountDownLatch startCool = new CountDownLatch(1);
-
-    private CountDownLatch endSignal;
-    private CountDownLatch endPeak;
-    private CountDownLatch endCool;
     private int peakRequests = 0;
     private Logger LOGGER = Logger.getLogger(Client.class.getName());
-    private EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(2000, 1, TimeUnit.SECONDS, 1000);
+    private EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(1800, 1, TimeUnit.SECONDS, 500);
 
     public static void main(String[] args) throws InterruptedException, IOException, TimeoutException {
         final Client rmw = new Client();
@@ -66,18 +60,8 @@ public class Client {
 
         url = url + SERVERADDRESS + port + webapp;
 
-        rmw.endSignal = new CountDownLatch((NUMTHREADS/4));
-        rmw.endPeak = new CountDownLatch(NUMTHREADS);
-        rmw.endCool = new CountDownLatch((int) (NUMTHREADS * 0.10));
-
         long start = System.currentTimeMillis();
         rmw.executeStartupPhase();
-        rmw.executePeakPhase();
-        rmw.executeCooldownPhase();
-
-        rmw.endSignal.await();
-        rmw.endPeak.await();
-        rmw.endCool.await();
         long finish = System.currentTimeMillis();
         long wallTime = ((finish - start) / 1000);
 
@@ -132,11 +116,12 @@ public class Client {
         }
     }
 
-    public void executeStartupPhase() throws IOException {
+    public void executeStartupPhase() throws IOException, InterruptedException {
         int startSkierId = 1;
         int start = 1;
         int end = 90;
         int startupThreads = NUMTHREADS/4;
+        CountDownLatch completed = new CountDownLatch((NUMTHREADS/4));
 
         if (startupThreads == 0) {
             startupThreads = 1;
@@ -147,10 +132,10 @@ public class Client {
         expectedRequests += (maxCalls*startupThreads);
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(startupThreads);
+        cm.setMaxTotal(NUMTHREADS/2);
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute(startupThreads);
+        cm.setDefaultMaxPerRoute(NUMTHREADS/2);
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
         for (int i = 0; i < startupThreads; i++) {
@@ -168,9 +153,10 @@ public class Client {
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
 
                         int current = getSuccess();
+
                         // 20% requests done, signal the Peak threads to start
                         if (current == (Math.round(maxCalls * finalStartupThreads * 0.2))) {
-                            startPeak.countDown();
+                            executePeakPhase();
                         }
                         counter.getAndIncrement();
                     }
@@ -179,16 +165,17 @@ public class Client {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting start");
-                    endSignal.countDown();
+                    completed.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
         }
+        completed.await();
     }
 
-    private void executePeakPhase() throws IOException {
+    private void executePeakPhase() throws IOException, InterruptedException {
         int startSkierId = 1;
         int start = 91;
         int end = 360;
@@ -196,14 +183,14 @@ public class Client {
         double maxCalls = (((double)NUMRUNS * PEAK_POST_VARIABLE) * (range));
         int multiplier = 1;
         expectedRequests += ((maxCalls*NUMTHREADS));
-
+        CountDownLatch completed = new CountDownLatch(NUMTHREADS);
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         //increase max total connections to num threads
-        cm.setMaxTotal(NUMTHREADS/2);
+        cm.setMaxTotal(NUMTHREADS*2);
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute(NUMTHREADS/2);
+        cm.setDefaultMaxPerRoute(NUMTHREADS*2);
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
         for (int i = 0; i < NUMTHREADS; i++) {
@@ -215,18 +202,16 @@ public class Client {
             Runnable thread = () -> {
                 try {
                     // wait for the start up phase to signal us
-                    startPeak.await();
+                    //startPeak.await();
                     //System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
                         // execute the POST request
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
 
                         incCurrent();
-
-                        // 20% requests done, signal the Peak threads to start
                         if (getCurrent() == Math.round(maxCalls * NUMTHREADS * 0.2)) {
-                           // System.out.println("starting cool");
-                            startCool.countDown();
+                            // System.out.println("starting cool");
+                            executeCooldownPhase();
                         }
                         counter.getAndIncrement();
                     }
@@ -235,17 +220,17 @@ public class Client {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting peak");
-                    endPeak.countDown();
+                    completed.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
         }
-
+        completed.await();
     }
 
-    private void executeCooldownPhase() throws IOException {
+    private void executeCooldownPhase() throws IOException, InterruptedException {
         int startSkierId = 1;
         int start = 361;
         int end = 420;
@@ -253,14 +238,15 @@ public class Client {
         double maxCalls = (((double)NUMRUNS * COOL_POST_VARIABLE));
         int multiplier = 1;
         expectedRequests += (maxCalls*Math.round(NUMTHREADS*0.10));
+        CountDownLatch completed = new CountDownLatch((int) (NUMTHREADS*0.10));
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
 
         //increase max total connections to num threads
-        cm.setMaxTotal((int)(NUMTHREADS*0.10));
+        cm.setMaxTotal((int)(NUMTHREADS/2));
 
         // set max connections per route to num threads
-        cm.setDefaultMaxPerRoute(((int)(NUMTHREADS*0.10)));
+        cm.setDefaultMaxPerRoute(((int)(NUMTHREADS/2)));
         CloseableHttpClient httpClient = HttpClients.custom().setRetryHandler(requestRetryHandler).setConnectionManager(cm).build();
 
         for (int i = 0; i < (NUMTHREADS * 0.10); i++) {
@@ -272,24 +258,24 @@ public class Client {
                 try {
 
                     // wait for the peak thread to tell us to start
-                    startCool.await();
+                   // startCool.await();
                     while (counter.get() <= maxCalls) {
 
                         executePost(httpClient, finalStartSkierId, endSkierId, start, end);
                         counter.getAndIncrement();
                     }
-
                 } catch (InterruptedException | IOException | PeakLoadException e) {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting cool");
-                    endCool.countDown();
+                    completed.countDown();
                 }
             };
             new Thread(thread).start();
             multiplier += 1;
             startSkierId = endSkierId + 1;
         }
+        completed.await();
     }
 
 

@@ -18,8 +18,8 @@ public class SkierConsumer {
     private final static String QUEUE_NAME = "queue";
     private static final String EXCHANGE_NAME = "logs";
 
-    private final static String RABBITMQ_HOST_NAME = "54.149.209.131";
-    private final static String REDIS_HOST_NAME = "34.209.148.215";
+    private final static String RABBITMQ_HOST_NAME = "34.222.226.16";
+    private final static String REDIS_HOST_NAME = "35.167.192.216";
     private final static int NUM_THREADS = 256;
     private static Map<Integer, Integer> concurrentHashMap = null;
 
@@ -142,14 +142,14 @@ public class SkierConsumer {
 
             // if key exists, append the value
             if (jedis.exists(skierId)) {
-                // insert lift info into map {key: "skier-143 lifts", field: "day-10" value: "liftRide{time..waittime..}"}
+                // insert lift info into map {key: "skier-143-lifts", field: "day-10" value: "liftRide{time..waittime..}"}
                 String oldValue = jedis.hget("skier-"+skierId+"-lifts", "day-"+skier.getDayId());
                 jedis.hset("skier-"+skierId+"-lifts", "day-"+skier.getDayId(),oldValue+skier.getLiftRide().toString());
             } else {
                 // create list and insert skier info
                 jedis.hset("skier-"+skierId+"-lifts", "day-"+skier.getDayId(), skier.getLiftRide().toString());
             }
-            // insert day into set {key: "skier-143 days", value: "1", "365"...}
+            // insert day into set {key: "skier-143-days", value: "1", "365"...}
             jedis.sadd("skier-"+skierId+"-days", skier.getDayId());
 
             // insert vertical for each day into map {key: "143", field: "day-10" value: 210}
