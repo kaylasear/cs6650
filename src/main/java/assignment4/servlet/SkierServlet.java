@@ -263,7 +263,7 @@ public class SkierServlet extends HttpServlet {
 
     /** TODO: Struti - fetch results from Redis DB
      * Get the ski day vertical for a skier for the specified ski day
-     *  urlPath = GET/skiers/{skierId}/vertical
+     *  urlPath = GET/skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}
      * @param res
      * @param req
      * @param resortId
@@ -320,7 +320,7 @@ public class SkierServlet extends HttpServlet {
     /** TODO: Struti - fetch results from Redis DB
      * Get the total vertical for the skier for the specified season at specified resort. If no season,
      * return full list
-     * urlPath = GET/skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}
+     * urlPath = GET/skiers/{skierId}/vertical
      * @param res
      * @param req
      * @param id
