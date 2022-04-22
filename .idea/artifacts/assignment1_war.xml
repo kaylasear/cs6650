@@ -3,6 +3,45 @@
     <output-path>$PROJECT_DIR$/out/artifacts/assignment1_war</output-path>
     <root id="archive" name="assignment1_war.war">
       <element id="artifact" artifact-name="assignment1:war exploded" />
+      <element id="directory" name="WEB-INF">
+        <element id="directory" name="lib">
+          <element id="library" level="project" name="amqp-client-5.7.1" />
+          <element id="library" level="project" name="slf4j-api-1.7.26" />
+          <element id="library" level="project" name="slf4j-simple-1.7.26" />
+          <element id="library" level="project" name="amqp-client-5.14.2" />
+          <element id="library" level="project" name="javax.servlet-api-4.0.1" />
+          <element id="library" level="project" name="commons-pool2-2.11.1" />
+          <element id="library" level="project" name="Maven: com.google.code.gson:gson:2.8.9" />
+          <element id="library" level="project" name="Maven: commons-httpclient:commons-httpclient:3.1" />
+          <element id="library" level="project" name="Maven: commons-logging:commons-logging:1.0.4" />
+          <element id="library" level="project" name="Maven: commons-codec:commons-codec:1.2" />
+          <element id="library" level="project" name="Maven: org.apache.httpcomponents:httpcore:4.4.13" />
+          <element id="library" level="project" name="Maven: org.apache.httpcomponents:httpclient:4.5.13" />
+          <element id="library" level="project" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.10.4" />
+          <element id="library" level="project" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.10.4" />
+          <element id="library" level="project" name="Maven: com.fasterxml.jackson.core:jackson-core:2.10.4" />
+          <element id="library" level="project" name="Maven: com.rabbitmq:amqp-client:5.14.2" />
+          <element id="library" level="project" name="Maven: org.sonatype.aether:aether-impl:1.13.1" />
+          <element id="library" level="project" name="Maven: org.sonatype.aether:aether-api:1.13.1" />
+          <element id="library" level="project" name="Maven: org.sonatype.aether:aether-spi:1.13.1" />
+          <element id="library" level="project" name="Maven: org.sonatype.aether:aether-util:1.13.1" />
+          <element id="library" level="project" name="Maven: org.slf4j:slf4j-api:1.7.32" />
+          <element id="library" level="project" name="Maven: org.apache.commons:commons-pool2:2.11.1" />
+          <element id="library" level="project" name="Maven: redis.clients:jedis:4.2.0" />
+          <element id="library" level="project" name="Maven: org.json:json:20211205" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-circuitbreaker:1.7.0" />
+          <element id="library" level="project" name="Maven: io.vavr:vavr:0.10.2" />
+          <element id="library" level="project" name="Maven: io.vavr:vavr-match:0.10.2" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-core:1.7.0" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-ratelimiter:1.7.0" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-retry:1.7.0" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-bulkhead:1.7.0" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-cache:1.7.0" />
+          <element id="library" level="project" name="Maven: javax.cache:cache-api:1.1.0" />
+          <element id="library" level="project" name="Maven: io.github.resilience4j:resilience4j-timelimiter:1.7.0" />
+          <element id="library" level="project" name="Maven: org.apache.commons:commons-lang3:3.5" />
+        </element>
+      </element>
     </root>
   </artifact>
 </component>

@@ -18,8 +18,8 @@ public class SkierConsumer {
     private final static String QUEUE_NAME = "queue";
     private static final String EXCHANGE_NAME = "logs";
 
-    private final static String RABBITMQ_HOST_NAME = "34.222.226.16";
-    private final static String REDIS_HOST_NAME = "35.167.192.216";
+    private final static String RABBITMQ_HOST_NAME = "52.39.71.123";
+    private final static String REDIS_HOST_NAME = "34.210.155.15";
     private final static int NUM_THREADS = 256;
     private static Map<Integer, Integer> concurrentHashMap = null;
 

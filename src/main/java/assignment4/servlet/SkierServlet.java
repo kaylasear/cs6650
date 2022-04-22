@@ -7,6 +7,9 @@ import com.google.gson.Gson;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.exceptions.JedisException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -16,7 +19,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +38,7 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "34.222.226.16"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "52.39.71.123"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
     private static final int NUM_THREADS = 256;
     private static final String EXCHANGE_NAME = "logs";
@@ -44,6 +50,8 @@ public class SkierServlet extends HttpServlet {
 
     BlockingQueue<Channel> blockingQueue;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
+    private final static String REDIS_HOST_NAME = "54.189.28.206";
+    private static JedisPool pool;
 
     public SkierServlet() {
     }
@@ -63,6 +71,9 @@ public class SkierServlet extends HttpServlet {
         factory.setHost(HOST_ADDRESS);
         factory.setPort(PORT);
 
+        // connect to redis
+        connectToDatabase();
+
         try {
             connection = factory.newConnection();
 
@@ -79,6 +90,28 @@ public class SkierServlet extends HttpServlet {
             LOGGER.info(e.getMessage());
         }
     }
+
+    /**
+     * Connect and configure to the database. Thread-safe configurations from
+     * https://www.baeldung.com/jedis-java-redis-client-library
+     */
+    private static void connectToDatabase() {
+        pool = new JedisPool(REDIS_HOST_NAME , 6379);
+
+        pool.setMaxTotal(NUM_THREADS);
+        pool.setBlockWhenExhausted(true);
+        pool.setMaxIdle(NUM_THREADS);
+        pool.setMinIdle(16);
+        pool.setMinEvictableIdle(Duration.ofMillis(60000));
+        pool.setTimeBetweenEvictionRuns(Duration.ofMillis(30000));
+        pool.setNumTestsPerEvictionRun(3);
+        pool.setTestOnBorrow(true);
+        pool.setTestOnReturn(true);
+        pool.setTestWhileIdle(true);
+
+        System.out.println("Connection successful");
+    }
+
 
     /**
      * POST method - validate request and URL, create JSON message, and send message to queue
@@ -232,7 +265,7 @@ public class SkierServlet extends HttpServlet {
         out.flush();
     }
 
-    /** TODO: Struti - fetch results from Redis DB
+    /**
      * Get the ski day vertical for a skier for the specified ski day
      *  urlPath = GET/skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}
      * @param res
@@ -243,18 +276,48 @@ public class SkierServlet extends HttpServlet {
      * @param skierId
      */
     private void getSkierDayVertical(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId, Integer skierId) throws IOException {
-        SkierVerticalResorts skierVerticalResorts = new SkierVerticalResorts(seasonId, 34507); // dummy data
-        Integer totalVert = skierVerticalResorts.getTotalVert();
+        Jedis jedis = pool.getResource();
 
-        String resultString = this.gson.toJson(totalVert);
-        PrintWriter out = res.getWriter();
-        res.setCharacterEncoding("UTF-8");
-        out.println(resultString);
-        out.flush();
+        try {
+            String skierIdStr = String.valueOf(skierId);
+            String dayField = "day-"+dayId;
+            ResponseMsg responseMsg = null;
+
+            //check if the skierID entry is present for the skierID
+            Integer sumTotalVertical = null;
+            if(jedis.exists(skierIdStr)) {
+                //check if dayID is present
+                if (jedis.hexists(skierIdStr, dayField)) {
+                    sumTotalVertical = Integer.parseInt(jedis.hget(skierIdStr, dayField));
+                    //else return appropriate API message
+                } else {
+                    responseMsg = new ResponseMsg("Day Id does not exist for the skier");
+                }
+                //handle case where skierID is not there in DB
+            }else{
+                responseMsg = new ResponseMsg("Skier ID does not exist");
+            }
+            PrintWriter out = res.getWriter();
+            res.setCharacterEncoding("UTF-8");
+            if(sumTotalVertical != null){
+                out.println(sumTotalVertical);
+            }else{
+                out.println(responseMsg);
+            }
+            out.flush();
+        } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
+        } finally {
+            pool.returnResource(jedis);
+        }
 
     }
 
-    /** TODO: Struti - fetch results from Redis DB
+    /**
      * Get the total vertical for the skier for the specified season at specified resort. If no season,
      * return full list
      * urlPath = GET/skiers/{skierId}/vertical
@@ -263,17 +326,42 @@ public class SkierServlet extends HttpServlet {
      * @param id
      */
     private void getSkierResortTotal(HttpServletResponse res, HttpServletRequest req, Integer id) throws IOException {
-        //dummy data
-        SkierVertical skierVertical = new SkierVertical();
-        skierVertical.addVertical("2019", 34507);
+        Jedis jedis = pool.getResource();
+        ResponseMsg responseMsg = null;
+        String resultString = null;
+        try {
+            String skierId = String.valueOf(id);
+            Integer seasonID = 2022;
+            if (jedis.exists(skierId)) {
+                List<String> verticalTotalsForSkierIDList = jedis.hvals(skierId);
+                Integer sumTotal = 0;
+                for (String skierTotal : verticalTotalsForSkierIDList) {
+                    sumTotal += Integer.parseInt(skierTotal);
+                }
+                SkierVertical skierVerticalResponse = new SkierVertical();
+                skierVerticalResponse.addVertical(seasonID.toString(), sumTotal);
+                resultString = this.gson.toJson(skierVerticalResponse);
+            } else {
+                responseMsg = new ResponseMsg("SkierID does not exist");
+            }
 
-        ArrayList<SkierVerticalResorts> result = skierVertical.getResorts();
-
-        String resultString = this.gson.toJson(result);
-        PrintWriter out = res.getWriter();
-        res.setCharacterEncoding("UTF-8");
-        out.println(resultString);
-        out.flush();
+            PrintWriter out = res.getWriter();
+            res.setCharacterEncoding("UTF-8");
+            if(resultString != null){
+                out.println(resultString);
+            }else{
+                out.println(responseMsg);
+            }
+            out.flush();
+        } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
+        } finally {
+            pool.returnResource(jedis);
+        }
 
     }
 
@@ -282,7 +370,7 @@ public class SkierServlet extends HttpServlet {
         // urlPath = "skiers/{skierId}/vertical
         if (urlPath.length == urlPathVerticalLength) {
             if (urlPath[verticalParam].equals("vertical"))
-            return true;
+                return true;
         } else {
             // urlPath  = "/1/seasons/2019/day/1/skier/123"
             // urlParts = [, 1, seasons, 2019, days, 1, skiers, 123]
