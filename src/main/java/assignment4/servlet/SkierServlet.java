@@ -261,7 +261,7 @@ public class SkierServlet extends HttpServlet {
         System.out.println("Connection successful");
     }
 
-    /** TODO: Struti - fetch results from Redis DB
+    /**
      * Get the ski day vertical for a skier for the specified ski day
      *  urlPath = GET/skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}
      * @param res
@@ -278,16 +278,12 @@ public class SkierServlet extends HttpServlet {
             String skierIdStr = String.valueOf(skierId);
             ResponseMsg responseMsg = null;
 
-            //check if the dayID entry is present for the skierID
-            Integer sumTotalVertical = 0;
+            //check if the skierID entry is present for the skierID
+            Integer sumTotalVertical = null;
             if(jedis.exists(skierIdStr)) {
+                //check if dayID is present
                 if (jedis.hexists(skierIdStr, dayId)) {
-                    Map<String, String> verticalTotalsByDayIDSkierID = jedis.hgetAll(skierIdStr);
-                    for (Map.Entry<String, String> entry : verticalTotalsByDayIDSkierID.entrySet()) {
-                        if (entry.getKey().equals(dayId)) {
-                            sumTotalVertical += Integer.parseInt(entry.getValue());
-                        }
-                    }
+                    sumTotalVertical = Integer.parseInt(jedis.hget(skierIdStr, dayId));
                     //else return appropriate API message
                 } else {
                     responseMsg = new ResponseMsg("Day Id does not exist for the skier");
@@ -298,13 +294,12 @@ public class SkierServlet extends HttpServlet {
             }
             PrintWriter out = res.getWriter();
             res.setCharacterEncoding("UTF-8");
-            if(sumTotalVertical != 0){
+            if(sumTotalVertical != null){
                 out.println(sumTotalVertical);
-                out.flush();
             }else{
                 out.println(responseMsg);
-                out.flush();
             }
+            out.flush();
         } catch (JedisException e) {
             if (jedis != null) {
                 // if error, return it back to pool
@@ -317,7 +312,7 @@ public class SkierServlet extends HttpServlet {
 
     }
 
-    /** TODO: Struti - fetch results from Redis DB
+    /**
      * Get the total vertical for the skier for the specified season at specified resort. If no season,
      * return full list
      * urlPath = GET/skiers/{skierId}/vertical
@@ -328,25 +323,31 @@ public class SkierServlet extends HttpServlet {
     private void getSkierResortTotal(HttpServletResponse res, HttpServletRequest req, Integer id) throws IOException {
         connectToDatabase();
         Jedis jedis = pool.getResource();
+        ResponseMsg responseMsg = null;
+        String resultString = null;
         try {
             String skierId = String.valueOf(id);
             Integer seasonID = 2;
-
-            //How to specify resort for this?
-            //Should it connect to resort DB?
-            List<String> verticalTotalsForSkierIDList = jedis.hvals(skierId);
-            Integer sumTotal = 0;
-            for (String skierTotal : verticalTotalsForSkierIDList) {
-                sumTotal += Integer.parseInt(skierTotal);
+            if (jedis.exists(skierId)) {
+                List<String> verticalTotalsForSkierIDList = jedis.hvals(skierId);
+                Integer sumTotal = 0;
+                for (String skierTotal : verticalTotalsForSkierIDList) {
+                    sumTotal += Integer.parseInt(skierTotal);
+                }
+                SkierVertical skierVerticalResponse = new SkierVertical();
+                skierVerticalResponse.addVertical(seasonID.toString(), sumTotal);
+                resultString = this.gson.toJson(skierVerticalResponse);
+            } else {
+                responseMsg = new ResponseMsg("SkierID does not exist");
             }
 
-            SkierVertical skierVerticalResponse = new SkierVertical();
-            skierVerticalResponse.addVertical(seasonID.toString(), sumTotal);
-
-            String resultString = this.gson.toJson(skierVerticalResponse);
             PrintWriter out = res.getWriter();
             res.setCharacterEncoding("UTF-8");
-            out.println(resultString);
+            if(resultString != null){
+                out.println(resultString);
+            }else{
+                out.println(responseMsg);
+            }
             out.flush();
         } catch (JedisException e) {
             if (jedis != null) {

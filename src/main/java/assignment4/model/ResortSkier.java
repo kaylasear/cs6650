@@ -4,6 +4,7 @@ package assignment4.model;
  * Class represents a resort that has a name and total number of skiers.
  */
 public class ResortSkier {
+    //TODO: Should resortName be changed to time?
     protected String resortName;
     protected Integer numSkiers;
 
