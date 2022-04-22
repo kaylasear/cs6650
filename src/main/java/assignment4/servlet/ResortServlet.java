@@ -2,9 +2,6 @@ package assignment4.servlet;
 
 import assignment1.part1.model.*;
 import com.google.gson.Gson;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.exceptions.JedisException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -13,8 +10,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 
 public class ResortServlet extends HttpServlet {
@@ -23,33 +20,8 @@ public class ResortServlet extends HttpServlet {
     private final static int dayParam = 4;
     private final static int skierParam = 6;
     private final static int urlPathResortsLength = 3;
-    private static final int NUM_THREADS = 256;
-
 
     private Gson gson = new Gson();
-    private final static String REDIS_HOST_NAME = "34.211.157.153";
-    private static JedisPool pool;
-
-    /**
-     * Connect and configure to the database. Thread-safe configurations from
-     * https://www.baeldung.com/jedis-java-redis-client-library
-     */
-    private static void connectToDatabase() {
-        pool = new JedisPool(REDIS_HOST_NAME , 6379);
-
-        pool.setMaxTotal(NUM_THREADS);
-        pool.setBlockWhenExhausted(true);
-        pool.setMaxIdle(NUM_THREADS);
-        pool.setMinIdle(16);
-        pool.setMinEvictableIdle(Duration.ofMillis(60000));
-        pool.setTimeBetweenEvictionRuns(Duration.ofMillis(30000));
-        pool.setNumTestsPerEvictionRun(3);
-        pool.setTestOnBorrow(true);
-        pool.setTestOnReturn(true);
-        pool.setTestWhileIdle(true);
-
-        System.out.println("Connection successful");
-    }
 
     /**
      * Get a list of ski resorts in the database. Get number of
@@ -115,7 +87,7 @@ public class ResortServlet extends HttpServlet {
         out.flush();
     }
 
-    /**
+    /** TODO: Struti - fetch results from Redis DB
      * Get total number of skiers at specified resort, season, day
      * urlPath = GET/resorts/{resortID}/seasons/{seasonID}/day/{dayID}/skiers
      * @param res
@@ -128,51 +100,22 @@ public class ResortServlet extends HttpServlet {
         ResortsList resortsList = new ResortsList();
         ArrayList<Resort> list = resortsList.getResorts();
 
-        connectToDatabase();
-        Jedis jedis = pool.getResource();
-        try {
-            String resortIDStr = String.valueOf(resortId);
-            ResponseMsg responseMsg = null;
+        // dummy data
+        ResortSkier resortSkier = new ResortSkier("Mission Ridge", 78999);
 
-            //TODO: How to check for season?
-            //TODO: Should we check for resort ID and day ID separately?
-            String key = "resort-"+resortIDStr+"-day-"+dayId;
-            Set<String> skierDataSet = new HashSet<>();
-            List<String> skierDataList = new ArrayList<>();
+        String seasonsJsonString = this.gson.toJson(resortSkier);
+        PrintWriter out = res.getWriter();
+        res.setCharacterEncoding("UTF-8");
+        out.print(seasonsJsonString);
+        out.flush();
 
-            //check set/entry for resortID/dayID exists
-            if(jedis.scard(key) == 1){
-                    skierDataSet = jedis.smembers(key);
-                    skierDataList = new ArrayList<String>();
-                    for (String skierID : skierDataSet) {
-                        skierDataList.add(skierID);
-                    }
-                    //else return appropriate API message
-                } else {
-                    responseMsg = new ResponseMsg("Resort ID/Day ID entry does not exist");
-                }
-//                //handle case where day ID is not there in DB
-//            }else{
-//                responseMsg = new ResponseMsg("Day ID does not exist");
+//        for (Resort resort: list) {
+//            if (resort.getResortId() == resortId) {
+//                String resortName = resort.getResortName();
+//                ResortSkier resortSkier;
 //            }
-            PrintWriter out = res.getWriter();
-            res.setCharacterEncoding("UTF-8");
-            if(skierDataList.size() != 0){
-                out.println(skierDataList);
-                out.flush();
-            }else{
-                out.println(responseMsg);
-                out.flush();
-            }
-        } catch (JedisException e) {
-            if (jedis != null) {
-                // if error, return it back to pool
-                pool.returnBrokenResource(jedis);
-                jedis = null;
-            }
-        } finally {
-            pool.returnResource(jedis);
-        }
+//        }
+
     }
 
     public SeasonsList getSeasonsByResortId(HttpServletResponse res, HttpServletRequest req, Integer resortId) throws IOException {
