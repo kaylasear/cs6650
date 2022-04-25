@@ -4,13 +4,18 @@ package assignment4;
 
 import org.apache.commons.lang3.concurrent.EventCountCircuitBreaker;
 import org.apache.http.HttpEntity;
+import org.apache.http.ProtocolException;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 
@@ -61,7 +66,7 @@ public class Client {
         url = url + SERVERADDRESS + port + webapp;
 
         long start = System.currentTimeMillis();
-        rmw.executeStartupPhase();
+        rmw.executePeakPhase();
         long finish = System.currentTimeMillis();
         long wallTime = ((finish - start) / 1000);
 
@@ -206,17 +211,17 @@ public class Client {
                     //System.out.println("starting peak");
                     while (counter.get() <= maxCalls) {
                         // execute the POST request
-                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
-
+//                        executePost(httpClient, finalStartSkierId, endSkierId, start, end);
+                        executeGet(httpClient);
                         incCurrent();
-                        if (getCurrent() == Math.round(maxCalls * NUMTHREADS * 0.2)) {
-                            // System.out.println("starting cool");
-                            executeCooldownPhase();
-                        }
+//                        if (getCurrent() == Math.round(maxCalls * NUMTHREADS * 0.2)) {
+//                            // System.out.println("starting cool");
+//                            executeCooldownPhase();
+//                        }
                         counter.getAndIncrement();
                     }
 
-                } catch (InterruptedException | IOException | PeakLoadException e) {
+                } catch (IOException e) {
                 } finally {
                     // we've finished - let the main thread know
                     System.out.println("shutting peak");
@@ -229,6 +234,32 @@ public class Client {
         }
         completed.await();
     }
+
+    private void executeGet(CloseableHttpClient httpClient) throws IOException {
+        String localVarPath = "/resorts/10/seasons/2022/day/1/skiers";
+        String url = buildURL(localVarPath);
+
+//        HttpGet method = new HttpGet(localVarPath);
+//        HttpContext context = new BasicHttpContext();
+
+        try
+        {
+            HttpGet httpget = new HttpGet(url);
+            BasicResponseHandler responseHandler = new BasicResponseHandler();//Here is the change
+            String responseBody = httpClient.execute(httpget, responseHandler);
+            System.out.println(responseBody);
+        }
+        catch (ClientProtocolException e)
+        {
+            e.printStackTrace();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+    }
+
 
     private void executeCooldownPhase() throws IOException, InterruptedException {
         int startSkierId = 1;

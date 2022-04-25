@@ -38,9 +38,9 @@ public class SkierServlet extends HttpServlet {
     private final static int verticalParam = 2;
     private final static int urlPathVerticalLength = 3;
 
-    private static final String HOST_ADDRESS = "52.39.71.123"; // rabbitmq ec2 instance
+    private static final String HOST_ADDRESS = "52.13.90.18"; // rabbitmq ec2 instance
     private static final int PORT = 5672;
-    private static final int NUM_THREADS = 256;
+    private static final int NUM_THREADS = 128;
     private static final String EXCHANGE_NAME = "logs";
 
     private Gson gson = new Gson();
@@ -50,7 +50,7 @@ public class SkierServlet extends HttpServlet {
 
     BlockingQueue<Channel> blockingQueue;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
-    private final static String REDIS_HOST_NAME = "54.189.28.206";
+    private final static String REDIS_HOST_NAME = "54.214.218.244";
     private static JedisPool pool;
 
     public SkierServlet() {
@@ -276,9 +276,10 @@ public class SkierServlet extends HttpServlet {
      * @param skierId
      */
     private void getSkierDayVertical(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId, Integer skierId) throws IOException {
-        Jedis jedis = pool.getResource();
+        Jedis jedis = null;
 
         try {
+            jedis = pool.getResource();
             String skierIdStr = String.valueOf(skierId);
             String dayField = "day-"+dayId;
             ResponseMsg responseMsg = null;
@@ -306,13 +307,12 @@ public class SkierServlet extends HttpServlet {
             }
             out.flush();
         } catch (JedisException e) {
+            e.printStackTrace();
+        } finally {
             if (jedis != null) {
                 // if error, return it back to pool
-                pool.returnBrokenResource(jedis);
-                jedis = null;
+                pool.returnResource(jedis);
             }
-        } finally {
-            pool.returnResource(jedis);
         }
 
     }

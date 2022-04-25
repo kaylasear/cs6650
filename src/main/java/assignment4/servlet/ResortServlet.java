@@ -26,11 +26,11 @@ public class ResortServlet extends HttpServlet {
     private final static int dayParam = 4;
     private final static int skierParam = 6;
     private final static int urlPathResortsLength = 3;
-    private static final int NUM_THREADS = 256;
+    private static final int NUM_THREADS = 128;
 
 
     private Gson gson = new Gson();
-    private final static String REDIS_HOST_NAME = "54.189.106.78";
+    private final static String REDIS_HOST_NAME = "34.210.142.4";
     private static JedisPool pool;
 
 
@@ -135,9 +135,9 @@ public class ResortServlet extends HttpServlet {
      * @param dayId
      */
     public void getTotalSkiersAtResort(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId) throws IOException {
-        Jedis jedis = pool.getResource();
-
+        Jedis jedis = null;
         try {
+           jedis = pool.getResource();
             String resortIDStr = String.valueOf(resortId);
             ResponseMsg responseMsg = null;
             String key = "resort-"+resortIDStr+"-day-"+dayId;
@@ -164,13 +164,11 @@ public class ResortServlet extends HttpServlet {
             }
             out.flush();
         } catch (JedisException e) {
-            if (jedis != null) {
-                // if error, return it back to pool
-                pool.returnBrokenResource(jedis);
-                jedis = null;
-            }
+            e.printStackTrace();
         } finally {
-            pool.returnResource(jedis);
+            if (jedis != null) {
+                pool.returnResource(jedis);
+            }
         }
     }
 
