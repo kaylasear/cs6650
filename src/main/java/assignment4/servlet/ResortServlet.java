@@ -30,7 +30,7 @@ public class ResortServlet extends HttpServlet {
 
 
     private Gson gson = new Gson();
-    private final static String REDIS_HOST_NAME = "34.210.142.4";
+    private final static String REDIS_HOST_NAME = "34.217.5.8";
     private static JedisPool pool;
 
 
@@ -135,21 +135,22 @@ public class ResortServlet extends HttpServlet {
      * @param dayId
      */
     public void getTotalSkiersAtResort(HttpServletResponse res, HttpServletRequest req, Integer resortId, String seasonId, String dayId) throws IOException {
+
         Jedis jedis = null;
         try {
-           jedis = pool.getResource();
+            jedis = pool.getResource();
             String resortIDStr = String.valueOf(resortId);
             ResponseMsg responseMsg = null;
-            String key = "resort-"+resortIDStr+"-day-"+dayId;
+            String key = "resort-" + resortIDStr + "-day-" + dayId;
             Set<String> skierDataSet = new HashSet<>();
             Integer size = 0;
             ResortSkier resortSkier = null;
 
             //check set/entry for resortID/dayID exists
-            if(jedis.exists(key)){
+            if (jedis.exists(key)) {
                 skierDataSet = jedis.smembers(key);
                 size = skierDataSet.size();
-                resortSkier = new ResortSkier("Mission Ridge",size);
+                resortSkier = new ResortSkier("Mission Ridge", size);
                 //else return appropriate API message
             } else {
                 responseMsg = new ResponseMsg("Resort ID/Day ID entry does not exist");
@@ -157,13 +158,19 @@ public class ResortServlet extends HttpServlet {
 
             PrintWriter out = res.getWriter();
             res.setCharacterEncoding("UTF-8");
-            if(size != 0){
+
+            if (size != 0) {
                 out.println(resortSkier);
-            }else{
+            } else {
                 out.println(responseMsg);
             }
             out.flush();
         } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
             e.printStackTrace();
         } finally {
             pool.returnResource(jedis);

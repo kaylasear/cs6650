@@ -50,7 +50,7 @@ public class SkierServlet extends HttpServlet {
 
     BlockingQueue<Channel> blockingQueue;
     private Logger LOGGER = Logger.getLogger(SkierServlet.class.getName());
-    private final static String REDIS_HOST_NAME = "54.214.218.244";
+    private final static String REDIS_HOST_NAME = "34.219.28.162";
     private static JedisPool pool;
 
     public SkierServlet() {
@@ -307,6 +307,11 @@ public class SkierServlet extends HttpServlet {
             }
             out.flush();
         } catch (JedisException e) {
+            if (jedis != null) {
+                // if error, return it back to pool
+                pool.returnBrokenResource(jedis);
+                jedis = null;
+            }
             e.printStackTrace();
         } finally {
            pool.returnResource(jedis);
