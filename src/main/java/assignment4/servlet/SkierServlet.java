@@ -309,10 +309,7 @@ public class SkierServlet extends HttpServlet {
         } catch (JedisException e) {
             e.printStackTrace();
         } finally {
-            if (jedis != null) {
-                // if error, return it back to pool
-                pool.returnResource(jedis);
-            }
+           pool.returnResource(jedis);
         }
 
     }

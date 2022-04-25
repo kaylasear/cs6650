@@ -166,9 +166,7 @@ public class ResortServlet extends HttpServlet {
         } catch (JedisException e) {
             e.printStackTrace();
         } finally {
-            if (jedis != null) {
-                pool.returnResource(jedis);
-            }
+            pool.returnResource(jedis);
         }
     }
 
