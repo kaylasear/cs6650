@@ -29,6 +29,10 @@ Scalable distributed cloud-based system that recorded ski lift rides from a mock
   - Resort
 - Implemented a producer and consumer pattern executed with RabbitMQ
 
+## System Design & Architecture
+![ski-resort-architecture.png](https://github.com/kaylasear/cs6650/blob/master/ski-resort-architecture.png)
+![ski-resort-structure.png](https://github.com/kaylasear/cs6650/blob/master/ski-resort-structure.png)
+
 ## Project Status
 
 **Finished**
